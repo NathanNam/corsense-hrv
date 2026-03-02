@@ -1,0 +1,15 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Training data (too large to share)
+data/
+
+# OS
+.DS_Store
+
+# Claude
+.claude/
+
+# Node (web app has its own .gitignore)

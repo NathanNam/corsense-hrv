@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@keyframes pulse-heart {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.animate-pulse-heart {
+  animation: pulse-heart var(--pulse-duration, 1s) ease-in-out infinite;
+}
