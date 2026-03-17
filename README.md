@@ -2,7 +2,7 @@
 
 Real-time heart rate variability monitoring with ML-based stress detection, running entirely in the browser.
 
-Connect any Bluetooth heart rate monitor, view live HRV metrics, and get stress predictions from a LightGBM model trained on the [WESAD dataset](https://archive.ics.uci.edu/dataset/465/wesad+wearable+stress+and+affect+detection).
+Connect any Bluetooth heart rate monitor, view live HRV metrics, and get stress predictions from a LightGBM model trained on the [WESAD dataset](https://archive.ics.uci.edu/dataset/465/wesad+wearable+stress+and+affect+detection). Optionally, ask **Newton** (powered by [Archetype AI](https://www.archetypeai.app/)) natural language questions about your HRV data.
 
 ## How It Works
 
@@ -27,6 +27,17 @@ Open **http://localhost:3000** in Chrome or Edge (Web Bluetooth is not supported
 
 Click **Connect HR Monitor** and select your device from the browser's Bluetooth picker.
 
+### Enabling Newton (optional)
+
+To enable the conversational AI panel, create `web/.env.local` with your [Archetype AI](https://console.u1.archetypeai.app/) credentials:
+
+```
+ATAI_API_KEY=your_api_key
+ATAI_API_ENDPOINT=https://api.u1.archetypeai.app/v0.5
+```
+
+When configured, an **Ask Newton** chat panel appears on the right side after you connect a device. You can ask questions like "Am I stressed?", "Should I work out today?", or "Explain my HRV". Without these keys, the app works exactly as before.
+
 ## Compatible Devices
 
 Any Bluetooth Low Energy heart rate monitor that supports the standard [Heart Rate Profile](https://www.bluetooth.com/specifications/specs/heart-rate-profile-1-0/) and reports RR intervals, including:
@@ -47,13 +58,18 @@ hrv/
 │   │   ├── connection-panel    # BLE connect/disconnect
 │   │   ├── heart-rate-display  # Live HR + RMSSD display
 │   │   ├── stress-indicator    # Stress prediction card
+│   │   ├── newton-chat         # Newton conversational AI panel
 │   │   ├── stress-chart        # Stress probability over time
 │   │   ├── hr-chart            # Heart rate chart
 │   │   ├── rr-chart            # RR interval chart
 │   │   └── rmssd-chart         # RMSSD chart
 │   ├── hooks/
 │   │   ├── use-heart-rate      # BLE connection + data streaming
-│   │   └── use-stress-prediction # Sliding window + inference
+│   │   ├── use-stress-prediction # Sliding window + inference
+│   │   └── use-newton          # Newton chat state + API calls
+│   ├── app/api/newton/         # Newton API routes (server-side)
+│   │   ├── status/route.ts     # GET — checks if Newton is configured
+│   │   └── query/route.ts      # POST — classifies RR data via Archetype AI
 │   └── lib/
 │       ├── ble-constants       # Standard BLE UUIDs
 │       ├── parse-heart-rate    # BLE characteristic parser
@@ -105,9 +121,21 @@ python train_stress_model.py      # Train + export to models/
 python export_model_trees.py      # Convert to JSON for browser
 ```
 
+## Newton (Archetype AI)
+
+When enabled, the **Ask Newton** panel uses Archetype AI's [Machine State Lens](https://docs.archetypeai.app/) to classify your HRV state. The flow:
+
+1. Your live RR intervals are formatted as a CSV on the server
+2. Two synthetic focus CSVs (relaxed and stressed HRV profiles) are uploaded as n-shot examples
+3. The Machine State Lens classifies your data against those profiles via SSE streaming
+4. Classification scores are combined with local HRV metrics (heart rate, RMSSD, stress probability) to generate a natural language response
+
+Newton takes ~10-15 seconds per query since it runs server-side classification. The in-browser LightGBM model continues to provide real-time stress predictions independently.
+
 ## Tech Stack
 
 - **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS 4
 - **Charts**: Recharts
 - **BLE**: Web Bluetooth API
-- **ML**: LightGBM (trained in Python, inference in TypeScript)
+- **ML (local)**: LightGBM (trained in Python, inference in TypeScript)
+- **ML (cloud, optional)**: Archetype AI Machine State Lens
