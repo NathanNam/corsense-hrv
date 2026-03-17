@@ -4,7 +4,7 @@ __pycache__/
 *.pyc
 
 # Training data (too large to share)
-data/
+/data/
 
 # Environment variables
 .env

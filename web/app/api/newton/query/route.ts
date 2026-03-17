@@ -1,29 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 const MACHINE_STATE_LENS = 'lns-1d519091822706e2-bc108andqxf8b4os';
 const SSE_TIMEOUT_MS = 120_000;
 const WINDOW_SIZE = 16;
 const STEP_SIZE = 16;
 
-// --- Focus CSV generators (synthetic HRV profiles) ---
+// --- Focus CSVs (real WESAD RR intervals) ---
 
-function generateFocusCSV(meanRR: number, stdRR: number, n: number): string {
-  const lines = ['timestamp,a1'];
-  let t = 0;
-  // Simple seeded-ish deterministic generation using sine
-  for (let i = 0; i < n; i++) {
-    const variation = stdRR * Math.sin(i * 0.7) + stdRR * 0.5 * Math.cos(i * 1.3);
-    const rr = Math.max(300, Math.min(1500, meanRR + variation));
-    t += rr / 1000;
-    lines.push(`${t.toFixed(3)},${rr.toFixed(1)}`);
-  }
-  return lines.join('\n');
-}
-
-// Relaxed: high HRV (long RR intervals, high variability)
-const RELAXED_CSV = generateFocusCSV(900, 80, 128);
-// Stressed: low HRV (short RR intervals, low variability)
-const STRESSED_CSV = generateFocusCSV(650, 25, 128);
+const RELAXED_CSV = readFileSync(join(process.cwd(), 'data', 'focus-relaxed.csv'), 'utf-8');
+const STRESSED_CSV = readFileSync(join(process.cwd(), 'data', 'focus-stressed.csv'), 'utf-8');
 
 // --- API helpers ---
 

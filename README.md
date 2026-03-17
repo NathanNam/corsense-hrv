@@ -126,9 +126,11 @@ python export_model_trees.py      # Convert to JSON for browser
 When enabled, the **Ask Newton** panel uses Archetype AI's [Machine State Lens](https://docs.archetypeai.app/) to classify your HRV state. The flow:
 
 1. Your live RR intervals are formatted as a CSV on the server
-2. Two synthetic focus CSVs (relaxed and stressed HRV profiles) are uploaded as n-shot examples
+2. Two focus CSVs — real RR intervals extracted from the WESAD dataset (baseline → relaxed, stress → stressed) — are uploaded as n-shot examples
 3. The Machine State Lens classifies your data against those profiles via SSE streaming
 4. Classification scores are combined with local HRV metrics (heart rate, RMSSD, stress probability) to generate a natural language response
+
+The focus CSVs are pre-generated and committed to `web/data/`, so Newton works without the WESAD dataset present. To regenerate them from source data, run `python extract_focus_csv.py`.
 
 Newton takes ~10-15 seconds per query since it runs server-side classification. The in-browser LightGBM model continues to provide real-time stress predictions independently.
 
