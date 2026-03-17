@@ -94,6 +94,7 @@ export default function Home() {
               <NewtonChat
                 messages={newton.messages}
                 loading={newton.loading}
+                rrCount={rrHistory.length}
                 onAsk={handleAskNewton}
               />
             </div>

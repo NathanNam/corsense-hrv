@@ -5,12 +5,68 @@ import { join } from 'path';
 const MACHINE_STATE_LENS = 'lns-1d519091822706e2-bc108andqxf8b4os';
 const SSE_TIMEOUT_MS = 120_000;
 const WINDOW_SIZE = 16;
-const STEP_SIZE = 16;
+const STEP_SIZE = 8;
 
-// --- Focus CSVs (real WESAD RR intervals) ---
+// --- Focus CSVs (real WESAD RR intervals, uploaded once and cached) ---
 
 const RELAXED_CSV = readFileSync(join(process.cwd(), 'data', 'focus-relaxed.csv'), 'utf-8');
 const STRESSED_CSV = readFileSync(join(process.cwd(), 'data', 'focus-stressed.csv'), 'utf-8');
+
+let cachedFocusFiles: { relaxedId: string; stressedId: string; baseUrl: string; apiKey: string } | null = null;
+
+async function getFocusFileIds(baseUrl: string, apiKey: string) {
+  if (cachedFocusFiles && cachedFocusFiles.baseUrl === baseUrl && cachedFocusFiles.apiKey === apiKey) {
+    return { relaxedId: cachedFocusFiles.relaxedId, stressedId: cachedFocusFiles.stressedId };
+  }
+  const [relaxedId, stressedId] = await Promise.all([
+    uploadCSV(baseUrl, apiKey, 'focus_relaxed.csv', RELAXED_CSV),
+    uploadCSV(baseUrl, apiKey, 'focus_stressed.csv', STRESSED_CSV),
+  ]);
+  cachedFocusFiles = { relaxedId, stressedId, baseUrl, apiKey };
+  console.log(`[newton] uploaded focus files: relaxed=${relaxedId}, stressed=${stressedId}`);
+  return { relaxedId, stressedId };
+}
+
+// --- Rolling HRV features (must match extract_focus_csv.py) ---
+
+const ROLLING_WINDOW = 16;
+
+interface RollingFeatures {
+  rmssd: number;
+  sdnn: number;
+  meanHr: number;
+  pnn50: number;
+  sd1: number;
+}
+
+function computeRollingFeatures(rrIntervalsMs: number[]): RollingFeatures[] {
+  const results: RollingFeatures[] = [];
+  for (let i = 0; i < rrIntervalsMs.length; i++) {
+    const start = Math.max(0, i - ROLLING_WINDOW + 1);
+    const window = rrIntervalsMs.slice(start, i + 1);
+    if (window.length < 2) {
+      results.push({ rmssd: 0, sdnn: 0, meanHr: 0, pnn50: 0, sd1: 0 });
+      continue;
+    }
+    const diffs: number[] = [];
+    for (let j = 1; j < window.length; j++) diffs.push(window[j] - window[j - 1]);
+
+    const meanRr = window.reduce((a, b) => a + b, 0) / window.length;
+    const rmssd = Math.sqrt(diffs.reduce((s, d) => s + d * d, 0) / diffs.length);
+    const variance = window.reduce((s, v) => s + (v - meanRr) ** 2, 0) / (window.length - 1);
+    const sdnn = Math.sqrt(variance);
+    const meanHr = window.reduce((s, v) => s + 60000 / v, 0) / window.length;
+    const pnn50 = (diffs.filter(d => Math.abs(d) > 50).length / diffs.length) * 100;
+    const diffMean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+    const diffVar = diffs.length > 1
+      ? diffs.reduce((s, d) => s + (d - diffMean) ** 2, 0) / (diffs.length - 1)
+      : 0;
+    const sd1 = Math.sqrt(diffVar) / Math.SQRT2;
+
+    results.push({ rmssd, sdnn, meanHr, pnn50, sd1 });
+  }
+  return results;
+}
 
 // --- API helpers ---
 
@@ -208,28 +264,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'question and rrIntervals are required' }, { status: 400 });
   }
 
-  // Build user data CSV (column "a1" to match focus files)
-  const csvLines = ['timestamp,a1'];
+  // Build user data CSV with rolling HRV features (must match focus file columns)
+  const features = computeRollingFeatures(rrIntervals);
+  const csvLines = ['timestamp,a1,rmssd,sdnn,mean_hr,pnn50,sd1'];
   let t = 0;
-  for (const rr of rrIntervals) {
+  for (let i = 0; i < rrIntervals.length; i++) {
+    const rr = rrIntervals[i];
+    const f = features[i];
     t += rr / 1000;
-    csvLines.push(`${t.toFixed(3)},${rr.toFixed(1)}`);
+    csvLines.push(
+      `${t.toFixed(3)},${rr.toFixed(1)},${f.rmssd.toFixed(1)},${f.sdnn.toFixed(1)},${f.meanHr.toFixed(1)},${f.pnn50.toFixed(1)},${f.sd1.toFixed(1)}`,
+    );
   }
   const userCSV = csvLines.join('\n');
 
-  const fileIds: string[] = [];
+  let dataId: string | null = null;
   let sessionId: string | null = null;
 
   try {
-    // 1. Upload all CSVs in parallel (unique names to avoid collisions)
-    const uid = Date.now().toString(36);
-    const [relaxedId, stressedId, dataId] = await Promise.all([
-      uploadCSV(baseUrl, apiKey, `relaxed_${uid}.csv`, RELAXED_CSV),
-      uploadCSV(baseUrl, apiKey, `stressed_${uid}.csv`, STRESSED_CSV),
-      uploadCSV(baseUrl, apiKey, `hrv_${uid}.csv`, userCSV),
+    // 1. Get cached focus file IDs (uploaded once) + upload user data
+    const [{ relaxedId, stressedId }, uploadedDataId] = await Promise.all([
+      getFocusFileIds(baseUrl, apiKey),
+      uploadCSV(baseUrl, apiKey, `hrv_${Date.now().toString(36)}.csv`, userCSV),
     ]);
-    fileIds.push(relaxedId, stressedId, dataId);
-    console.log(`[newton] uploaded files: ${fileIds.join(', ')} (${rrIntervals.length} RR intervals)`);
+    dataId = uploadedDataId;
+    console.log(`[newton] data file: ${dataId} (${rrIntervals.length} RR intervals)`);
 
     // 2. Create session
     const sessionRes = await apiPost(baseUrl, apiKey, 'lens/sessions/create', {
@@ -246,7 +305,7 @@ export async function POST(request: NextRequest) {
           input_n_shot: { relaxed: relaxedId, stressed: stressedId },
           csv_configs: {
             timestamp_column: 'timestamp',
-            data_columns: ['a1'],
+            data_columns: ['a1', 'rmssd', 'sdnn', 'mean_hr', 'pnn50', 'sd1'],
             window_size: WINDOW_SIZE,
             step_size: STEP_SIZE,
           },
@@ -292,17 +351,19 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ response });
   } catch (err) {
+    // Invalidate cached focus files so they get re-uploaded on next request
+    cachedFocusFiles = null;
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Newton request failed' },
       { status: 500 },
     );
   } finally {
-    // Cleanup
+    // Cleanup: destroy session and delete per-query data file (focus files are cached)
     if (sessionId) {
       apiPost(baseUrl, apiKey, 'lens/sessions/destroy', { session_id: sessionId }).catch(() => {});
     }
-    for (const fid of fileIds) {
-      deleteFile(baseUrl, apiKey, fid);
+    if (dataId) {
+      deleteFile(baseUrl, apiKey, dataId);
     }
   }
 }

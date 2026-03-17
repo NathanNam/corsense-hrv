@@ -10,13 +10,17 @@ const SUGGESTED_QUESTIONS = [
   'How is my recovery?',
 ];
 
+const MIN_RR_FOR_GOOD_ANALYSIS = 64;
+
 interface NewtonChatProps {
   messages: ChatMessage[];
   loading: boolean;
+  rrCount: number;
   onAsk: (question: string) => void;
 }
 
-export function NewtonChat({ messages, loading, onAsk }: NewtonChatProps) {
+export function NewtonChat({ messages, loading, rrCount, onAsk }: NewtonChatProps) {
+  const lowData = rrCount < MIN_RR_FOR_GOOD_ANALYSIS;
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +42,12 @@ export function NewtonChat({ messages, loading, onAsk }: NewtonChatProps) {
         <h2 className="text-sm font-semibold text-gray-700">Ask Newton</h2>
         <p className="text-xs text-gray-400">AI-powered HRV insights</p>
       </div>
+
+      {lowData && (
+        <div className="mx-4 mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+          Collecting data... Newton works best with 1+ minutes of readings ({rrCount}/{MIN_RR_FOR_GOOD_ANALYSIS} beats).
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 max-h-[60vh] min-h-[200px]">
