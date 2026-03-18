@@ -123,16 +123,81 @@ python export_model_trees.py      # Convert to JSON for browser
 
 ## Newton (Archetype AI)
 
-When enabled, the **Ask Newton** panel uses Archetype AI's [Machine State Lens](https://docs.archetypeai.app/) to classify your HRV state. The flow:
+When enabled, the **Ask Newton** chat panel uses Archetype AI's [Machine State Lens](https://docs.archetypeai.app/) — a pre-built n-shot classifier that compares live RR interval patterns against labeled "relaxed" and "stressed" reference examples to classify the user's current autonomic state.
 
-1. Your live RR intervals are formatted as a CSV on the server
-2. Two focus CSVs — real RR intervals extracted from the WESAD dataset (baseline → relaxed, stress → stressed) — are uploaded as n-shot examples
-3. The Machine State Lens classifies your data against those profiles via SSE streaming
-4. Classification scores are combined with local HRV metrics (heart rate, RMSSD, stress probability) to generate a natural language response
+Newton is **entirely optional**. Without `ATAI_API_KEY` and `ATAI_API_ENDPOINT` in `web/.env.local`, the app works fully — the Newton panel simply doesn't appear. The `/api/newton/status` endpoint returns `available: false`, and the frontend hides the panel.
 
-The focus CSVs are pre-generated and committed to `web/data/`, so Newton works without the WESAD dataset present. To regenerate them from source data, run `python extract_focus_csv.py`.
+### Archetype AI API flow (7 API calls per query)
 
-Newton takes ~10-15 seconds per query since it runs server-side classification. The in-browser LightGBM model continues to provide real-time stress predictions independently.
+**Step 1 — Upload files** (`POST /files`, 1-3 calls)
+
+Three CSV files are uploaded as multipart form data:
+
+- **`focus-relaxed.csv`** — 384 rows of real WESAD RR intervals from 3 subjects during baseline (label=1), with pre-computed rolling HRV features
+- **`focus-stressed.csv`** — 384 rows from 3 subjects during stress (label=2), same format
+- **User data CSV** — live RR intervals from the connected sensor, with the same rolling features computed on-the-fly by `computeRollingFeatures()`
+
+The focus files are **cached** at module scope (`cachedFocusFiles`) — uploaded once and reused across queries. Only the user data CSV is uploaded per query.
+
+CSV columns: `timestamp, a1 (raw RR ms), rmssd, sdnn, mean_hr, pnn50, sd1` — all computed over a trailing 16-beat window.
+
+**Step 2 — Create lens session** (`POST /lens/sessions/create`, 1 call)
+
+```json
+{ "lens_id": "lns-1d519091822706e2-bc108andqxf8b4os" }
+```
+
+Returns a `session_id` used for all subsequent calls.
+
+**Step 3 — Configure the session** (`POST /lens/sessions/events/process`, 3 calls)
+
+Three sequential events configure the session:
+
+- **`session.modify`** — Sets the n-shot examples (relaxed/stressed file IDs) and CSV parsing config (which columns to use, window size 16, step size 8)
+- **`input_stream.set`** — Points the lens at the user's uploaded CSV via `csv_file_reader`
+- **`output_stream.set`** — Tells the lens to emit results via `server_side_events_writer`
+
+**Step 4 — Read classification results** (SSE stream via `GET /lens/sessions/consumer/{session_id}`)
+
+The lens processes the user CSV in sliding windows (16 beats wide, 8 beat step) and emits `inference.result` events, each containing a classification label and confidence scores:
+
+```json
+{ "type": "inference.result", "event_data": { "response": ["relaxed", {"relaxed": 0.6, "stressed": 0.4}] } }
+```
+
+The stream ends with an `sse.stream.end` event.
+
+**Step 5 — Aggregate and respond** (client-side, no API call)
+
+`buildResponse()` aggregates votes across all windows (e.g., 7 windows with overlapping step=8), computes stressed/relaxed percentages, then generates a templated natural-language response based on keyword matching the user's question ("stress", "work out", "explain", etc.) and injecting HRV metrics from the in-browser LightGBM model (heart rate, RMSSD, stress probability).
+
+**Step 6 — Cleanup** (2 fire-and-forget calls)
+
+- `POST /lens/sessions/destroy` — tears down the session
+- `DELETE /files/delete/{file_id}` — deletes the user's per-query CSV (focus files stay cached)
+
+### Two ML models in parallel
+
+The app runs two independent stress classifiers:
+
+| | LightGBM (in-browser) | Newton (Archetype AI) |
+|---|---|---|
+| **Runs** | Client-side, real-time | Server-side, per query |
+| **Approach** | 100-tree gradient boosting on 18 HRV features | N-shot classification via Machine State Lens |
+| **Latency** | Instant (every new RR interval) | ~10-15 seconds per query |
+| **Confidence** | Typically 70-95% | Typically 54-60% |
+| **Requires API** | No | Yes (Archetype AI credentials) |
+
+They sometimes disagree — Newton's n-shot classification has a lower confidence ceiling than the trained LightGBM model.
+
+### Focus data
+
+The focus CSVs (`web/data/focus-relaxed.csv`, `web/data/focus-stressed.csv`) contain real physiological data from the WESAD dataset, selected by scoring segments for physiological correctness:
+
+- **Relaxed**: high RMSSD, low heart rate (score = RMSSD - mean HR)
+- **Stressed**: high heart rate, low RMSSD (score = mean HR - RMSSD)
+
+Top 3 subjects per class are selected and concatenated (128 beats each = 384 rows per file). To regenerate from WESAD source data, run `python extract_focus_csv.py`.
 
 ## Tech Stack
 
