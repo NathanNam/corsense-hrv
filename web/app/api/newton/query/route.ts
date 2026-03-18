@@ -118,6 +118,7 @@ async function readSSEResults(
   baseUrl: string,
   apiKey: string,
   sessionId: string,
+  expectedWindows?: number,
 ): Promise<ClassificationResult[]> {
   const url = `${baseUrl}/lens/sessions/consumer/${sessionId}`;
   const res = await fetch(url, {
@@ -130,12 +131,13 @@ async function readSSEResults(
   const decoder = new TextDecoder();
   const results: ClassificationResult[] = [];
   let buffer = '';
+  let done = false;
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+    while (!done) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
 
       const parts = buffer.split('\n\n');
       buffer = parts.pop() || '';
@@ -150,8 +152,12 @@ async function readSSEResults(
             if (Array.isArray(resp) && resp.length >= 2) {
               results.push({ label: resp[0], scores: resp[1] });
             }
+            if (expectedWindows && results.length >= expectedWindows) {
+              done = true;
+              break;
+            }
           } else if (event.type === 'sse.stream.end') {
-            reader.cancel();
+            done = true;
             break;
           }
         } catch {
@@ -160,6 +166,7 @@ async function readSSEResults(
       }
     }
   } finally {
+    reader.cancel().catch(() => {});
     reader.releaseLock();
   }
   return results;
@@ -342,8 +349,9 @@ export async function POST(request: NextRequest) {
     });
 
     // 4. Read classification results via SSE
-    console.log(`[newton] reading SSE for session ${sessionId}`);
-    const results = await readSSEResults(baseUrl, apiKey, sessionId!);
+    const expectedWindows = Math.max(1, Math.floor((rrIntervals.length - WINDOW_SIZE) / STEP_SIZE) + 1);
+    console.log(`[newton] reading SSE for session ${sessionId} (expecting ${expectedWindows} windows)`);
+    const results = await readSSEResults(baseUrl, apiKey, sessionId!, expectedWindows);
     console.log(`[newton] got ${results.length} results:`, JSON.stringify(results));
 
     // 5. Build natural language response

@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useHeartRate } from '../hooks/use-heart-rate';
 import { useStressPrediction } from '../hooks/use-stress-prediction';
 import { useNewton } from '../hooks/use-newton';
+import { useNewtonStream } from '../hooks/use-newton-stream';
 import { ConnectionPanel } from '../components/connection-panel';
 import { HeartRateDisplay } from '../components/heart-rate-display';
 import { StressIndicator } from '../components/stress-indicator';
+import { NewtonIndicator } from '../components/newton-indicator';
 import { HRChart } from '../components/hr-chart';
 import { RRChart } from '../components/rr-chart';
 import { RMSSDChart } from '../components/rmssd-chart';
@@ -32,6 +34,26 @@ export default function Home() {
 
   const stress = useStressPrediction(rrHistory);
   const newton = useNewton();
+  const newtonStream = useNewtonStream({
+    available: newton.available,
+    connected: status === 'connected',
+  });
+
+  // Stream RR intervals to Newton as they arrive
+  const prevRRLenRef = useRef(0);
+  const sendRR = newtonStream.sendRR;
+  useEffect(() => {
+    if (!newton.available || status !== 'connected') {
+      prevRRLenRef.current = 0;
+      return;
+    }
+    const newLen = rrHistory.length;
+    if (newLen > prevRRLenRef.current) {
+      const newRRs = rrHistory.slice(prevRRLenRef.current).map((p) => p.rr);
+      sendRR(newRRs);
+      prevRRLenRef.current = newLen;
+    }
+  }, [rrHistory, newton.available, status, sendRR]);
 
   const handleAskNewton = useCallback(
     (question: string) => {
@@ -69,13 +91,19 @@ export default function Home() {
 
             {(status === 'connected' || status === 'disconnected') && currentHR !== null && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className={`grid grid-cols-1 gap-6 ${newton.available ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
                   <HeartRateDisplay
                     currentHR={currentHR}
                     currentRMSSD={currentRMSSD}
                     sensorContact={sensorContact}
                   />
                   <StressIndicator stress={stress} />
+                  {newton.available && (
+                    <NewtonIndicator
+                      result={newtonStream.latestResult}
+                      streamConnected={newtonStream.streamConnected}
+                    />
+                  )}
                 </div>
 
                 <div className="grid gap-6">
