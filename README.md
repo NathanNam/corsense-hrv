@@ -2,7 +2,7 @@
 
 Real-time heart rate variability monitoring with ML-based stress detection, running entirely in the browser.
 
-Connect any Bluetooth heart rate monitor, view live HRV metrics, and get stress predictions from a LightGBM model trained on the [WESAD dataset](https://archive.ics.uci.edu/dataset/465/wesad+wearable+stress+and+affect+detection). Optionally, enable **Newton** (powered by [Archetype AI](https://www.archetypeai.app/)) for continuous AI-powered stress classification and a conversational AI chat that can answer open-ended questions about your HRV data.
+Connect any Bluetooth heart rate monitor, view live HRV metrics, and get stress predictions from a LightGBM model trained on the [WESAD dataset](https://archive.ics.uci.edu/dataset/465/wesad+wearable+stress+and+affect+detection). Optionally, enable **Newton** (powered by [Archetype AI](https://www.archetypeai.io/)) for continuous AI-powered stress classification and a conversational AI chat that can answer open-ended questions about your HRV data.
 
 ![HRV Monitor Dashboard](web/public/hrv-newton.png)
 
