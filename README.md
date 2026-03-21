@@ -255,7 +255,7 @@ Unlike the indicator (which uses template classification), the chat provides gen
 ### Future improvements
 
 - **True sensor streaming:** If/when the Archetype AI Sensor API becomes available, replace periodic batch queries with WebSocket-based real-time streaming for sub-second classification latency.
-- **Session reuse for chat:** Reuse the Activity Monitor lens session across chat queries (like the indicator does) to reduce API calls and potentially speed up responses.
+- **Session reuse for chat:** The indicator already reuses its Machine State Lens session across queries. Apply the same pattern to chat — reuse the Activity Monitor lens session across chat queries instead of creating and destroying a session per question.
 - **Custom lens:** Register a custom lens via `POST /lens/register` with a model tuned for HRV classification.
 
 ### Focus data
