@@ -22,7 +22,7 @@ export function StressChart({ data }: StressChartProps) {
   const threshold = MODEL_CONFIG.threshold;
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
+    <div id="chart-stress" className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
       <h3 className="text-sm font-medium text-gray-500 mb-3">Stress Probability Over Time</h3>
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={data}>

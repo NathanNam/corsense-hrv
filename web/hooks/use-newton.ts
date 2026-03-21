@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { captureCharts } from '../lib/capture-charts';
 
 export interface ChatMessage {
   role: 'user' | 'newton';
@@ -21,16 +22,19 @@ export function useNewton() {
   }, []);
 
   const askNewton = useCallback(
-    async (question: string, rrIntervals: number[], hrvMetrics?: Record<string, unknown>) => {
+    async (question: string) => {
       setMessages((prev) => [...prev, { role: 'user', text: question }]);
       setLoading(true);
       setError(null);
 
       try {
+        // Capture the 4 HRV charts as a screenshot
+        const chartImage = await captureCharts();
+
         const res = await fetch('/api/newton/query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question, rrIntervals, hrvMetrics }),
+          body: JSON.stringify({ question, chartImage }),
         });
 
         const data = await res.json();

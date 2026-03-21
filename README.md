@@ -2,7 +2,9 @@
 
 Real-time heart rate variability monitoring with ML-based stress detection, running entirely in the browser.
 
-Connect any Bluetooth heart rate monitor, view live HRV metrics, and get stress predictions from a LightGBM model trained on the [WESAD dataset](https://archive.ics.uci.edu/dataset/465/wesad+wearable+stress+and+affect+detection). Optionally, enable **Newton** (powered by [Archetype AI](https://www.archetypeai.app/)) for continuous AI-powered stress classification that updates every 15 seconds, plus an on-demand conversational chat panel.
+Connect any Bluetooth heart rate monitor, view live HRV metrics, and get stress predictions from a LightGBM model trained on the [WESAD dataset](https://archive.ics.uci.edu/dataset/465/wesad+wearable+stress+and+affect+detection). Optionally, enable **Newton** (powered by [Archetype AI](https://www.archetypeai.app/)) for continuous AI-powered stress classification and a conversational AI chat that can answer open-ended questions about your HRV data.
+
+![HRV Monitor Dashboard](web/public/hrv-newton.png)
 
 ## How It Works
 
@@ -29,7 +31,7 @@ Click **Connect HR Monitor** and select your device from the browser's Bluetooth
 
 ### Enabling Newton (optional)
 
-To enable the conversational AI panel, create `web/.env.local` with your [Archetype AI](https://console.u1.archetypeai.app/) credentials:
+To enable the AI features, create `web/.env.local` with your [Archetype AI](https://console.u1.archetypeai.app/) credentials:
 
 ```
 ATAI_API_KEY=your_api_key
@@ -38,10 +40,12 @@ ATAI_API_ENDPOINT=https://api.u1.archetypeai.app/v0.5
 
 When configured, two Newton features appear after you connect a device:
 
-- **Newton AI indicator card** — real-time classification (Stressed/Relaxed) that updates automatically every ~15 seconds alongside the LightGBM stress card
-- **Ask Newton chat panel** — conversational AI panel on the right side where you can ask questions like "Am I stressed?", "Should I work out today?", or "Explain my HRV"
+- **Newton AI indicator card** — real-time classification (Stressed/Relaxed) that updates automatically every ~15 seconds using the Machine State Lens
+- **Newton AI chat panel** — collapsible chat where you can ask open-ended questions like "Am I stressed?", "Should I work out today?", or "Explain my HRV". Newton captures screenshots of your live charts, converts them to video, and sends them to Archetype AI's Activity Monitor lens for genuine vision-based analysis.
 
 Without these keys, the app works exactly as before.
+
+**Requires `ffmpeg`** on the server for the chat feature (converts chart screenshots to video).
 
 ## Compatible Devices
 
@@ -64,7 +68,7 @@ hrv/
 │   │   ├── heart-rate-display  # Live HR + RMSSD display
 │   │   ├── stress-indicator    # Stress prediction card
 │   │   ├── newton-indicator    # Newton AI real-time classification card
-│   │   ├── newton-chat         # Newton conversational AI panel
+│   │   ├── newton-chat         # Newton conversational AI chat (collapsible)
 │   │   ├── stress-chart        # Stress probability over time
 │   │   ├── hr-chart            # Heart rate chart
 │   │   ├── rr-chart            # RR interval chart
@@ -72,12 +76,13 @@ hrv/
 │   ├── hooks/
 │   │   ├── use-heart-rate      # BLE connection + data streaming
 │   │   ├── use-stress-prediction # Sliding window + inference
-│   │   ├── use-newton          # Newton chat state + API calls
-│   │   └── use-newton-stream   # Newton streaming state + SSE/polling
+│   │   ├── use-newton          # Newton chat state + chart capture + API calls
+│   │   └── use-newton-stream   # Newton streaming classification + SSE
 │   ├── app/api/newton/         # Newton API routes (server-side)
 │   │   ├── status/route.ts     # GET — checks if Newton is configured
-│   │   ├── query/route.ts      # POST — classifies RR data via Archetype AI
-│   │   └── stream/             # Streaming endpoints
+│   │   ├── query/route.ts      # POST — vision-based chat via Activity Monitor lens
+│   │   └── stream/             # Streaming classification endpoints
+│   │       ├── route.ts        # GET — SSE stream for classification results
 │   │       ├── start/route.ts  # POST — starts periodic classification
 │   │       ├── stop/route.ts   # POST — stops periodic classification
 │   │       ├── data/route.ts   # POST — receives batched RR intervals
@@ -89,6 +94,7 @@ hrv/
 │       ├── hrv-features        # Full 18-feature extraction
 │       ├── stress-predictor    # LightGBM tree traversal
 │       ├── stress-model-data.json # Exported model trees + scaler
+│       ├── capture-charts      # html2canvas chart screenshot capture
 │       └── newton-stream       # Newton streaming singleton (server-side)
 │
 ├── models/                     # Trained model files
@@ -136,13 +142,25 @@ python export_model_trees.py      # Convert to JSON for browser
 
 ## Newton (Archetype AI)
 
-When enabled, the **Ask Newton** chat panel uses Archetype AI's [Machine State Lens](https://docs.archetypeai.app/) — a pre-built n-shot classifier that compares live RR interval patterns against labeled "relaxed" and "stressed" reference examples to classify the user's current autonomic state.
+Newton is **entirely optional**. Without `ATAI_API_KEY` and `ATAI_API_ENDPOINT` in `web/.env.local`, the app works fully — the Newton features simply don't appear. The `/api/newton/status` endpoint returns `available: false`, and the frontend hides the panels.
 
-Newton is **entirely optional**. Without `ATAI_API_KEY` and `ATAI_API_ENDPOINT` in `web/.env.local`, the app works fully — the Newton panel simply doesn't appear. The `/api/newton/status` endpoint returns `available: false`, and the frontend hides the panel.
+### Three ML models
 
-### Newton streaming architecture
+The app runs up to three independent AI systems:
 
-Newton runs continuous classification via a server-side singleton (`NewtonStreamManager`) that reuses a persistent Archetype AI lens session:
+| | LightGBM (in-browser) | Newton Indicator (Machine State Lens) | Newton Chat (Activity Monitor) |
+|---|---|---|---|
+| **Runs** | Client-side, real-time | Server-side, every 15s | On-demand (user asks) |
+| **Lens** | — | Machine State Lens | Activity Monitor |
+| **Input** | 18 HRV features | RR intervals as CSV | Chart screenshots as video |
+| **Output** | Stress probability % | Stressed/Relaxed % | Free-form AI text |
+| **Approach** | 100-tree gradient boosting | N-shot KNN classification | Newton vision model (2B params) |
+| **Latency** | Instant | ~1-2s (after ~30s cold start) | ~30-70s |
+| **Requires API** | No | Yes | Yes + ffmpeg |
+
+### Newton Indicator — streaming classification
+
+The Newton AI indicator card uses the **Machine State Lens** for continuous stress classification via a server-side singleton (`NewtonStreamManager`) that reuses a persistent Archetype AI lens session:
 
 ```
 Browser (BLE)                    Next.js Server                    Archetype AI
@@ -152,7 +170,7 @@ CorSense HR
 use-heart-rate (RR intervals)
     │
 use-newton-stream
-    ├── POST /stream/data ──▶ NewtonStreamManager ──▶ Lens Session
+    ├── POST /stream/data ──▶ NewtonStreamManager ──▶ Machine State Lens
     │   (batch RR every 5s)      │  (query every 15s)      │
     │                            │  session reuse           ▼
     └── EventSource ◀──── GET /stream (SSE) ◀──── Classification
@@ -165,51 +183,80 @@ use-newton-stream
 
 **Early SSE termination:** The expected number of classification windows is calculated from the data size (`(dataPoints - windowSize) / stepSize + 1`). Once all expected windows arrive, the SSE connection is closed immediately — without this, Archetype AI holds the stream open for 60-80 additional seconds before sending `sse.stream.end`.
 
+### Newton Chat — vision-based Q&A
+
+The Newton AI chat panel uses the **Activity Monitor lens** with Newton's generative vision model to answer open-ended questions about your HRV data:
+
+```
+Browser                          Next.js Server                    Archetype AI
+───────                          ──────────────                    ────────────
+User asks question
+    │
+html2canvas captures 4 charts
+(Stress, HR, RR, RMSSD)
+    │
+POST /api/newton/query ──▶ ffmpeg: PNG → MP4 video
+    │                           │
+    │                      Upload video to Archetype AI
+    │                           │
+    │                      Activity Monitor lens session
+    │                      (focus: HRV dashboard context)
+    │                      (instruction: user's question)
+    │                           │
+    ◀──────────────────── Newton vision model analyzes
+                          charts and returns free-form
+                          AI response
+```
+
+**How it works:**
+1. User asks a question (e.g., "Explain my HRV", "Am I stressed?")
+2. `html2canvas` captures screenshots of all 4 chart components
+3. Screenshots are composited into a 2×2 grid PNG
+4. Server converts PNG to a 10-second MP4 video via `ffmpeg`
+5. Video is uploaded to Archetype AI and fed to the Activity Monitor lens
+6. Newton's 2B-parameter vision model analyzes the charts and returns a detailed natural language response
+7. Response is displayed with markdown formatting (paragraphs, lists, bold text)
+
+Unlike the indicator (which uses template classification), the chat provides genuine AI analysis — Newton reads and interprets the actual chart visualizations.
+
 ### Archetype AI API flow
 
-**Per-query (reused session, 3 API calls):**
+**Indicator — per-query (reused session, 3 API calls):**
 1. `POST /files` — Upload user data CSV with rolling HRV features
 2. `POST /lens/sessions/events/process` — Set `input_stream` to the new CSV
 3. `GET /lens/sessions/consumer/{session_id}` — Read `inference.result` SSE events
 
-**First-time setup (adds 4 more calls):**
+**Indicator — first-time setup (adds 4 more calls):**
 1. `POST /files` (×2) — Upload focus-relaxed.csv and focus-stressed.csv (cached after first upload)
 2. `POST /lens/sessions/create` — Create a new Machine State Lens session
 3. `POST /lens/sessions/events/process` — `session.modify` with n-shot file IDs and CSV config
 4. `POST /lens/sessions/events/process` — `output_stream.set` to enable SSE output
 
+**Chat — per-query (new session each time, 6 API calls):**
+1. `POST /files` — Upload chart video (MP4)
+2. `POST /lens/sessions/create` — Create Activity Monitor session
+3. `POST /lens/sessions/events/process` — `session.modify` with focus + instruction
+4. `POST /lens/sessions/events/process` — `output_stream.set` (before input to avoid race)
+5. `POST /lens/sessions/events/process` — `input_stream.set` with `video_file_reader`
+6. `GET /lens/sessions/consumer/{session_id}` — Read `inference.result` SSE event
+
 **Cleanup on disconnect:**
-- `POST /lens/sessions/destroy` — Tears down the persistent session
-- `DELETE /files/delete/{file_id}` — Deletes per-query data CSVs (focus files stay cached)
-
-CSV columns: `timestamp, a1 (raw RR ms), rmssd, sdnn, mean_hr, pnn50, sd1` — all computed over a trailing 16-beat rolling window.
-
-### Two ML models in parallel
-
-The app runs two independent stress classifiers:
-
-| | LightGBM (in-browser) | Newton (Archetype AI) |
-|---|---|---|
-| **Runs** | Client-side, real-time | Server-side, every 15s |
-| **Approach** | 100-tree gradient boosting on 18 HRV features | N-shot classification via Machine State Lens |
-| **Latency** | Instant (every new RR interval) | ~1-2s per query (after initial ~30s setup) |
-| **Confidence** | Typically 70-95% | Typically 50-60% |
-| **Requires API** | No | Yes (Archetype AI credentials) |
-
-They sometimes disagree — Newton's n-shot classification has a lower confidence ceiling than the trained LightGBM model.
+- `POST /lens/sessions/destroy` — Tears down sessions
+- `DELETE /files/delete/{file_id}` — Deletes uploaded files
 
 ### Current limitations
 
 - **No true real-time streaming:** The Archetype AI Sensor API (`POST /sensors/register`) returns 500 errors — it's not available for the current API key/plan. This prevents WebSocket-based real-time data streaming to the platform. Instead, we batch RR intervals and run periodic lens queries.
-- **Archetype AI Capabilities API (`/summarize`) non-functional:** Returns 400 errors — uploaded files stay at `FILE_STATUS_REGISTERED` with `ingested: false`. Even the official Python SDK fails with the same error.
-- **Newton confidence is low:** N-shot classification via the Machine State Lens typically produces 50-60% confidence scores, compared to 70-95% from the trained LightGBM model. The lens is a general-purpose classifier, not specialized for HRV.
-- **First query cold start:** The initial lens session setup takes ~25-30s. Subsequent queries complete in ~1-2s thanks to session reuse.
+- **Chat latency (~30-70s):** The Activity Monitor lens + Newton vision model takes 30-70 seconds to analyze chart screenshots. This is the model inference time, not a bug.
+- **Indicator confidence is low:** N-shot classification via the Machine State Lens typically produces 50-60% confidence scores, compared to 70-95% from the trained LightGBM model. The lens is a general-purpose classifier, not specialized for HRV.
+- **Indicator cold start (~30s):** The initial lens session setup takes ~25-30s. Subsequent queries complete in ~1-2s thanks to session reuse.
+- **ffmpeg dependency:** The chat feature requires `ffmpeg` installed on the server to convert chart screenshots to video.
 
 ### Future improvements
 
-- **True sensor streaming:** If/when the Archetype AI Sensor API becomes available, replace periodic batch queries with WebSocket-based real-time streaming (`ws://.../sensors/streamer/{stream_uid}`) for sub-second classification latency.
-- **Custom lens:** Register a custom lens via `POST /lens/register` using `lens_sensor_logs_processor` with a model tuned for HRV classification, rather than relying on the generic Machine State Lens.
-- **Session warm-up:** Pre-create the lens session at app startup (before device connection) to eliminate the cold-start delay on the first query.
+- **True sensor streaming:** If/when the Archetype AI Sensor API becomes available, replace periodic batch queries with WebSocket-based real-time streaming for sub-second classification latency.
+- **Session reuse for chat:** Reuse the Activity Monitor lens session across chat queries (like the indicator does) to reduce API calls and potentially speed up responses.
+- **Custom lens:** Register a custom lens via `POST /lens/register` with a model tuned for HRV classification.
 
 ### Focus data
 
@@ -226,4 +273,6 @@ Top 3 subjects per class are selected and concatenated (128 beats each = 384 row
 - **Charts**: Recharts
 - **BLE**: Web Bluetooth API
 - **ML (local)**: LightGBM (trained in Python, inference in TypeScript)
-- **ML (cloud, optional)**: Archetype AI Machine State Lens
+- **ML (cloud, optional)**: Archetype AI — Machine State Lens (classification) + Activity Monitor (vision Q&A)
+- **Chart capture**: html2canvas-pro
+- **Video conversion**: ffmpeg

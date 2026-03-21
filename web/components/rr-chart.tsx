@@ -19,7 +19,7 @@ export function RRChart({ data }: RRChartProps) {
   if (data.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
+    <div id="chart-rr" className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
       <h3 className="text-sm font-medium text-gray-500 mb-3">RR Intervals</h3>
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={data}>
