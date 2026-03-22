@@ -1,0 +1,10 @@
+bleak
+numpy
+scipy
+scikit-learn
+joblib
+lightgbm
+xgboost
+pandas
+python-dotenv
+archetypeai

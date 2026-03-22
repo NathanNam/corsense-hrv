@@ -47,6 +47,32 @@ Without these keys, the app works exactly as before.
 
 **Requires `ffmpeg`** on the server for the chat feature (converts chart screenshots to video).
 
+### Python BLE tools
+
+Connect directly to a heart rate monitor from the command line:
+
+```bash
+source venv/bin/activate
+pip install -r requirements.txt
+
+python scan.py                    # Scan for BLE heart rate monitors
+python connect.py                 # Stream live HR + RR intervals from CorSense
+python connect.py <BLE_ADDRESS>   # Connect to a specific device
+```
+
+### Newton experiment (optional)
+
+Run the full Newton HRV experiment pipeline — collects RR data from a CorSense via BLE, runs LightGBM stress prediction, then sends the data to Newton (Archetype AI) for conversational analysis:
+
+```bash
+python newton_experiment.py                  # Collect 2 min + analyze
+python newton_experiment.py --duration 60    # Collect 1 min
+python newton_experiment.py --file data.csv  # Analyze existing CSV
+python newton_experiment.py --lens           # Use Lens API instead of Capabilities API
+```
+
+Requires `ATAI_API_KEY` and `ATAI_API_ENDPOINT` in `.env`.
+
 ## Compatible Devices
 
 Any Bluetooth Low Energy heart rate monitor that supports the standard [Heart Rate Profile](https://www.bluetooth.com/specifications/specs/heart-rate-profile-1-0/) and reports RR intervals, including:
@@ -102,8 +128,15 @@ hrv/
 │   ├── stress_scaler.joblib    # StandardScaler (Python)
 │   └── stress_config.json      # Config, metrics, feature importances
 │
+├── connect.py                  # BLE connection + live HR/HRV streaming
+├── scan.py                     # BLE device scanner
 ├── train_stress_model.py       # Training pipeline (WESAD dataset)
-└── export_model_trees.py       # Export model to JSON for browser
+├── export_model_trees.py       # Export model to JSON for browser
+├── newton_experiment.py        # Newton HRV experiment (BLE → Newton pipeline)
+├── test_activity_monitor.py    # Test Activity Monitor lens with CSV data
+├── test_activity_monitor_video.py # Test Activity Monitor lens with video input
+├── test_sensor_stream.py       # Test Archetype AI sensor streaming API
+└── requirements.txt            # Python dependencies
 ```
 
 ## Model Details
@@ -131,10 +164,9 @@ To retrain on the WESAD dataset:
 2. Extract to `data/WESAD/` so the structure is `data/WESAD/S2/`, `data/WESAD/S3/`, etc.
 
 ```bash
-
 python3 -m venv venv
 source venv/bin/activate
-pip install numpy scipy pandas scikit-learn joblib xgboost lightgbm
+pip install -r requirements.txt
 
 python train_stress_model.py      # Train + export to models/
 python export_model_trees.py      # Convert to JSON for browser
