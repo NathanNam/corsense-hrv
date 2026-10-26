@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHeartRate } from '../hooks/use-heart-rate';
 import { useStressPrediction, MIN_QUALITY } from '../hooks/use-stress-prediction';
 import { useNewton } from '../hooks/use-newton';
@@ -27,10 +27,15 @@ export default function Home() {
   const live = hr.status === 'connected';
   const newton = useNewton(newtonRR, live, hr.sessionId);
   const svgRef = useRef<SVGSVGElement>(null);
+  // Retake baseline: the next two minutes become the new baseline.
+  const [baselineFrom, setBaselineFrom] = useState(-Infinity);
+  useEffect(() => setBaselineFrom(-Infinity), [hr.sessionId]);
   const reading = useMemo(() => read(
     hr.rmssdHistory.map((p) => ({ time: p.time, value: p.rmssd })),
     hr.beats.filter((b) => !b.glitch).map((b) => ({ time: b.time, value: b.hr })),
-  ), [hr.rmssdHistory, hr.beats]);
+    baselineFrom,
+  ), [hr.rmssdHistory, hr.beats, baselineFrom]);
+  const retakeBaseline = useCallback(() => setBaselineFrom(hr.beats.length ? hr.beats[hr.beats.length - 1].time : 0), [hr.beats]);
   const started = hr.beats.length > 0 || live;
   const elapsed = hr.beats.length ? hr.beats[hr.beats.length - 1].time : 0;
 
@@ -74,7 +79,7 @@ export default function Home() {
               {hr.demoLabel === 'relaxed' && <button className="btn small" onClick={() => hr.startDemo(7.5 * 60_000)}>Jump to the stress part</button>}</p>
           )}
           <div className="grid">
-            <Verdict reading={reading} paused={stress.paused} modelP={stress.prediction?.probability ?? null} threshold={MODEL_CONFIG.threshold} newton={newton.reading} newtonOn={newton.available} newtonBeats={newton.beatsToFirst} newtonWindow={newton.windowSize} />
+            <Verdict reading={reading} paused={stress.paused} modelP={stress.prediction?.probability ?? null} threshold={MODEL_CONFIG.threshold} newton={newton.reading} newtonOn={newton.available} newtonBeats={newton.beatsToFirst} newtonWindow={newton.windowSize} onRetake={retakeBaseline} />
             <Heart hr={hr.currentHR} rmssd={hr.currentRMSSD} elapsed={elapsed} />
             <Quality quality={hr.signalQuality} glitches={hr.glitchesRemoved} recent={hr.beats.map((b) => !b.glitch)} minQuality={MIN_QUALITY} />
             <section className="card timeline wide">

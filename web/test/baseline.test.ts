@@ -28,3 +28,14 @@ test('higher HRV and a lower heart rate read as calmer', () => {
   const hr = [...series(0, 120_000, () => 75), ...series(125_000, 300_000, () => 70)];
   assert.equal(read(rm, hr).mood, 'calmer');
 });
+
+test('retaking the baseline starts a new two-minute baseline from that moment', () => {
+  // Tense start (35 ms), then calmer (70 ms) after a retake at 3 minutes.
+  const rm = [...series(0, 180_000, () => 35), ...series(185_000, 500_000, () => 70)];
+  const hr = [...series(0, 180_000, () => 80), ...series(185_000, 500_000, () => 66)];
+  assert.equal(read(rm, hr).mood, 'calmer');
+  const retaken = read(rm, hr, 180_000);
+  assert.equal(retaken.mood, 'steady');
+  assert.equal(Math.round(retaken.baseline!.rmssd), 70);
+  assert.equal(read(rm.filter((p) => p.time <= 240_000), hr.filter((p) => p.time <= 240_000), 180_000).mood, 'learning');
+});

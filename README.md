@@ -22,7 +22,7 @@ The time between heartbeats keeps changing. When you're relaxed it varies more; 
   - **What counts as a glitch:** a beat that's physically impossible, or further from the recent beats than your own beat-to-beat variation allows. That limit is 5.2 quartile deviations of recent changes, never below 20%, as in Kubios (Lipponen & Tarvainen 2019).
   - **What you see:** each glitch is shown as a dashed tick, and a signal-quality score tracks them.
   - **When readings pause:** if fewer than 80% of the last 30 seconds' beats are clean.
-- **Judges you against yourself.** HRV differs hugely between people, so the first two minutes set your baseline, as Elite HRV and similar apps do. After that, the stamp reads **Calmer**, **Steady** or **More stressed** from your HRV (RMSSD) and heart rate against that baseline.
+- **Judges you against yourself.** HRV differs hugely between people, so the first two minutes set your baseline, as Elite HRV and similar apps do. After that, the stamp reads **Calmer**, **Steady** or **More stressed** from your HRV (RMSSD) and heart rate against that baseline. **Retake baseline** starts a new one at any time. When the stamp says Steady or Calmer but both models say stressed (your HRV is low next to their examples, but hasn't dropped since your baseline), a note under the stamp explains why they differ.
 - **Gives two second opinions:**
   - **Stress model:** a LightGBM model running in the browser, from 18 HRV features over 30 seconds.
   - **Newton:** the last 64 beats are embedded with Archetype AI's Newton Omega encoder, then it takes a vote of the 5 most similar labelled windows.

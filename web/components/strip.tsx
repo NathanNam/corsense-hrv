@@ -46,7 +46,7 @@ const MOOD: Record<string, { word: string; cls: string }> = {
  * One verdict: you against your own first two minutes. The in-browser model and
  * Newton sit underneath as second opinions.
  */
-export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, newtonBeats, newtonWindow }: { reading: Reading; paused: boolean; modelP: number | null; threshold: number; newton: NewtonReading | null; newtonOn: boolean; newtonBeats: number; newtonWindow: number }) {
+export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, newtonBeats, newtonWindow, onRetake }: { reading: Reading; paused: boolean; modelP: number | null; threshold: number; newton: NewtonReading | null; newtonOn: boolean; newtonBeats: number; newtonWindow: number; onRetake: () => void }) {
   const m = paused ? { word: 'Hold still', cls: 'waiting' } : MOOD[reading.mood];
   let sub: string;
   if (paused) sub = 'Too many sensor glitches in the last 30 seconds. Keep your finger still on the sensor.';
@@ -57,11 +57,20 @@ export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, 
     sub = `HRV ${Math.round(reading.rmssd!)} ms vs your ${Math.round(reading.baseline!.rmssd)} ms baseline (${pct >= 0 ? '+' : ''}${pct}%) · heart rate ${d >= 0 ? '+' : ''}${d} bpm`;
   }
   const x = reading.ratio === null ? null : Math.min(1, Math.max(0, 1 - reading.ratio / 2));
+  // The stamp compares you with yourself; the models compare you with other
+  // people. When both models say stressed but you haven't changed, say why.
+  const modelStressed = modelP !== null && modelP >= threshold;
+  const newtonStressed = newton?.label === 'stressed';
+  const othersDisagree = !paused && (reading.mood === 'steady' || reading.mood === 'calmer') && modelStressed && (!newtonOn || newtonStressed);
+  const note = othersDisagree
+    ? `${newtonOn ? 'Both models' : 'The stress model'} read stressed, but your HRV hasn't dropped since your baseline. Your usual HRV may simply be lower than their examples (${Math.round(reading.rmssd!)} ms here), or you were already tense when the baseline was taken; if so, take a few slow breaths and retake it.`
+    : null;
   return (
     <section className="card verdict" aria-live="polite">
       <div className="k">Right now, against your baseline</div>
       <div className={`stamp ${m.cls}`}>{m.word}</div>
       <div className="sub">{sub}</div>
+      {note && <p className="note">{note}</p>}
       <div className="chips">
         <span title="LightGBM model trained on WESAD; above its threshold it reads stressed">
           Stress model: <b>{modelP === null ? '—' : `${modelP >= threshold ? 'stressed' : 'relaxed'} (${Math.round(modelP * 100)}%)`}</b>
@@ -77,6 +86,7 @@ export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, 
         {x !== null && <div className="mark" style={{ left: `${x * 100}%` }} />}
       </div>
       <div className="band-l"><span>calmer</span><span>your baseline</span><span>more stressed</span></div>
+      {reading.mood !== 'learning' && <button className="btn small retake" onClick={onRetake}>Retake baseline</button>}
     </section>
   );
 }

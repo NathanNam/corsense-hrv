@@ -35,9 +35,15 @@ export function baselineOf(rmssd: Point[], hr: Point[], start: number): Baseline
   return { rmssd: median(r), hr: median(h) };
 }
 
-export function read(rmssd: Point[], hr: Point[]): Reading {
+/**
+ * `from` restarts the baseline at that session time (Retake baseline); by
+ * default it's the start of the session.
+ */
+export function read(rmssd: Point[], hr: Point[], from = -Infinity): Reading {
   if (!hr.length) return { mood: 'learning', baseline: null, rmssd: null, hr: null, ratio: null, hrDelta: null, remaining: BASELINE_MS };
-  const start = hr[0].time, now = hr[hr.length - 1].time;
+  const first = hr.find((p) => p.time >= from);
+  if (!first) return { mood: 'learning', baseline: null, rmssd: null, hr: null, ratio: null, hrDelta: null, remaining: BASELINE_MS };
+  const start = first.time, now = hr[hr.length - 1].time;
   const recentR = rmssd.filter((p) => p.time > now - RECENT_MS).map((p) => p.value);
   const recentH = hr.filter((p) => p.time > now - RECENT_MS).map((p) => p.value);
   const cur = { rmssd: recentR.length ? median(recentR) : null, hr: recentH.length ? median(recentH) : null };
