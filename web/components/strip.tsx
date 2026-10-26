@@ -133,7 +133,7 @@ export function NewtonDrawer(props: {
           </header>
           {!props.available ? (
             <form className="body" onSubmit={useKey} style={{ display: 'block', border: 0 }}>
-              <p className="msg">Newton is Archetype AI&apos;s physical-world model. It adds a second stress reading and answers questions about your charts.</p>
+              <p className="msg">Newton is Archetype AI&apos;s physical-world model. With your API key it adds a second stress reading and answers questions about your charts.</p>
               <input type="password" autoComplete="off" spellCheck={false} placeholder="Your Archetype AI API key" aria-label="Archetype AI API key" value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} />
               <div style={{ marginTop: 10 }}><button className="btn ink" type="submit">Use key</button></div>
               <p className="fine">The key stays in this tab&apos;s memory and goes only to Archetype AI, through this site. It isn&apos;t saved anywhere; reloading forgets it. Get one at <a href="https://console.u1.archetypeai.app/" target="_blank" rel="noopener">console.u1.archetypeai.app</a>.</p>

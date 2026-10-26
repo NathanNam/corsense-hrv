@@ -102,7 +102,7 @@ export default function Home() {
         <p><a href="https://www.nathannam.com">Nathan Nam</a> · <a href="https://github.com/NathanNam/heartstrip">code</a></p>
       </footer>
 
-      {started && (
+      {(started || !newton.available) && (
         <NewtonDrawer available={newton.available} serverKey={newton.serverKey} ownKey={newton.ownKey} setOwnKey={newton.setOwnKey} messages={newton.messages} loading={newton.loading} onAsk={onAsk} readingError={newton.readingError} />
       )}
     </main>
