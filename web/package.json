@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "brand": "node scripts/brand.mjs"
   },
   "dependencies": {
     "next": "^16.4.3",

@@ -23,15 +23,15 @@ const EVERY_MS = 15_000;
  * is kept only in this tab's memory (React state): never in storage, never in
  * a URL. A reload forgets it.
  */
-export function useNewton(cleanRR: number[], live: boolean, sessionId: number) {
+export function useNewton(rr: number[], live: boolean, sessionId: number) {
   const [serverKey, setServerKey] = useState(false);
   const [ownKey, setOwnKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [reading, setReading] = useState<NewtonReading | null>(null);
   const [readingError, setReadingError] = useState<string | null>(null);
-  const rrRef = useRef(cleanRR);
-  rrRef.current = cleanRR;
+  const rrRef = useRef(rr);
+  rrRef.current = rr;
 
   useEffect(() => {
     fetch('/api/newton/status').then((r) => r.json()).then((d) => setServerKey(!!d.serverKey)).catch(() => setServerKey(false));

@@ -12,9 +12,20 @@ import { Logo, Start, Verdict, Heart, Quality, NewtonDrawer } from '../component
 export default function Home() {
   const hr = useHeartRate();
   const stress = useStressPrediction(hr.beats);
-  const cleanRR = useMemo(() => hr.beats.filter((b) => !b.glitch).map((b) => b.rr), [hr.beats]);
+  // For Newton: every beat in order, with each glitch replaced by the median of
+  // the five clean beats before it (as HRV tools correct artefacts), so the
+  // window stays one contiguous series instead of having holes.
+  const newtonRR = useMemo(() => {
+    const out: number[] = [];
+    const recent: number[] = [];
+    for (const b of hr.beats) {
+      if (!b.glitch) { recent.push(b.rr); if (recent.length > 5) recent.shift(); out.push(b.rr); }
+      else if (recent.length) out.push([...recent].sort((x, y) => x - y)[recent.length >> 1]);
+    }
+    return out;
+  }, [hr.beats]);
   const live = hr.status === 'connected';
-  const newton = useNewton(cleanRR, live, hr.sessionId);
+  const newton = useNewton(newtonRR, live, hr.sessionId);
   const svgRef = useRef<SVGSVGElement>(null);
   const reading = useMemo(() => read(
     hr.rmssdHistory.map((p) => ({ time: p.time, value: p.rmssd })),
@@ -59,7 +70,7 @@ export default function Home() {
       ) : (
         <>
           {hr.source === 'demo' && (
-            <p className="banner">Demo: a recorded WESAD session, played in real time: about 6 minutes relaxed, then 5 minutes of the stress task. Now playing: <b>{hr.demoLabel}</b>.{' '}
+            <p className="banner">Demo: the clearest relaxed and stressed examples from the WESAD study (chest ECG; three people each, picked separately, so likely different people), played in real time: about 6 minutes relaxed, then 5 minutes from a stress task. A real session is usually subtler. Now playing: <b>{hr.demoLabel}</b>.{' '}
               {hr.demoLabel === 'relaxed' && <button className="btn small" onClick={() => hr.startDemo(7.5 * 60_000)}>Jump to the stress part</button>}</p>
           )}
           <div className="grid">
@@ -87,7 +98,7 @@ export default function Home() {
 
       <footer className="foot">
         <p>Not medical advice. The verdict compares you with your own first two minutes, the way HRV apps such as Elite HRV use a personal baseline. The stress model underneath is a LightGBM model trained on chest-ECG recordings of 15 people (WESAD); on people it hadn&apos;t seen it was right about 6 times in 10 (AUC 0.71), and it hasn&apos;t been checked on fingertip sensors.</p>
-        <p>Newton (optional) votes among labelled WESAD windows embedded with Archetype AI&apos;s Newton Omega encoder; the recorded demo uses the same WESAD recordings, so in the demo it&apos;s a showcase, not a test.</p>
+        <p>Newton (optional) embeds the last 64 beats with Archetype AI&apos;s Newton Omega encoder and takes a vote of the 5 most similar labelled WESAD windows. Judging each of the six example people only against the other five, it got 29 of 30 windows right, but those are WESAD&apos;s clearest examples, so expect less on an ordinary session. In the demo it has seen these exact recordings.</p>
         <p><a href="https://www.nathannam.com">Nathan Nam</a> · <a href="https://github.com/NathanNam/heartstrip">code</a></p>
       </footer>
 

@@ -14,6 +14,10 @@ import session from '../public/demo/wesad-session.json';
 
 export const WINDOW = 64;      // beats per window, about 45-60 seconds
 const STEP = 16;
+// Each class joins three people's 128-beat recordings. Windows stay inside one
+// person's recording: the skill's rule is that a window must be one contiguous
+// series, and a window across a join is two people stitched together.
+const PERSON = 128;
 const K = 5;
 
 type Labelled = { label: string; vec: number[] };
@@ -35,7 +39,10 @@ const dist = (a: number[], b: number[]) => { let s = 0; for (let i = 0; i < a.le
 let library: Promise<Labelled[]> | null = null;
 
 async function buildLibrary(key: string): Promise<Labelled[]> {
-  const items = (session.segments as { label: string; rr: number[] }[]).flatMap((s) => windows(s.rr).map((w) => ({ label: s.label, w })));
+  const items = (session.segments as { label: string; rr: number[] }[]).flatMap((s) => {
+    const people = Array.from({ length: Math.ceil(s.rr.length / PERSON) }, (_, i) => s.rr.slice(i * PERSON, (i + 1) * PERSON));
+    return people.flatMap((rr) => windows(rr)).map((w) => ({ label: s.label, w }));
+  });
   // Eight at a time, as the skill's reference scripts do.
   const out: Labelled[] = new Array(items.length);
   let next = 0;
