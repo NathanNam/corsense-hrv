@@ -18,10 +18,12 @@ interface Props {
   rmssd: RMSSDPoint[];
   stress: StressPoint[];
   threshold: number;
+  /** Personal baseline HRV, drawn as a dashed line in the HRV lane. */
+  baseline?: number | null;
 }
 
 /** Heart rate, RR intervals, HRV and stress on one time axis: the last 10 minutes. */
-export const Timeline = forwardRef<SVGSVGElement, Props>(function Timeline({ beats, rmssd, stress, threshold }, ref) {
+export const Timeline = forwardRef<SVGSVGElement, Props>(function Timeline({ beats, rmssd, stress, threshold, baseline }, ref) {
   const end = beats.length ? beats[beats.length - 1].time : 0;
   const start = Math.max(0, end - SPAN_MS);
   const span = Math.max(60_000, end - start);
@@ -40,7 +42,7 @@ export const Timeline = forwardRef<SVGSVGElement, Props>(function Timeline({ bea
   const [hrLo, hrHi] = range(clean.map((b) => b.hr), 5, 30, 220);
   const [rrLo, rrHi] = range(clean.map((b) => b.rr), 40, 300, 2000);
   const [hvLo, hvHi] = [0, Math.max(60, Math.ceil(Math.max(0, ...rmssd.map((p) => p.rmssd)) / 20) * 20)];
-  const lanes: [string, string, number, number][] = [['HEART RATE', 'bpm', hrLo, hrHi], ['RR INTERVALS', 'ms', rrLo, rrHi], ['HRV · RMSSD', 'ms', hvLo, hvHi], ['STRESS', '%', 0, 100]];
+  const lanes: [string, string, number, number][] = [['HEART RATE', 'bpm', hrLo, hrHi], ['RR INTERVALS', 'ms', rrLo, rrHi], ['HRV · RMSSD', 'ms', hvLo, hvHi], ['STRESS MODEL', '%', 0, 100]];
   const stressPts = stress.filter((p) => p.time >= start).map((p) => [p.time, p.probability * 100] as [number, number]);
   const minuteTicks: number[] = [];
   for (let m = Math.ceil(start / 60_000); m * 60_000 <= start + span; m++) minuteTicks.push(m * 60_000);
@@ -68,6 +70,7 @@ export const Timeline = forwardRef<SVGSVGElement, Props>(function Timeline({ bea
         <path key={b.time} d={`M${x(b.time)} ${lane(1) + 6}V${lane(1) + LANE - 6}`} stroke={C.glitch} strokeWidth={2} strokeDasharray="3 3" />
       ))}
       <path d={line(rmssd.map((p) => [p.time, p.rmssd]), 2, hvLo, hvHi)} fill="none" stroke={C.rmssd} strokeWidth={2} />
+      {baseline != null && <path d={`M${LEFT} ${y(2, baseline, hvLo, hvHi)}H${W - RIGHT}`} stroke={C.rmssd} strokeDasharray="6 4" opacity={0.75} />}
       {stressPts.length > 1 && (
         <>
           <path d={`${line(stressPts, 3, 0, 100)}L${x(stressPts[stressPts.length - 1][0])} ${lane(3) + LANE}L${x(stressPts[0][0])} ${lane(3) + LANE}Z`} fill={C.stress} opacity={0.18} />

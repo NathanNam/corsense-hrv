@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import type { StressState } from '../hooks/use-stress-prediction';
+import type { Reading } from '../lib/baseline';
 import type { ChatMessage, NewtonReading } from '../hooks/use-newton';
 
 export function Logo() {
@@ -35,35 +35,42 @@ export function Start({ onConnect, onDemo, error, connecting }: { onConnect: () 
   );
 }
 
-/** One verdict, from the in-browser model, with Newton's reading beside it. */
-export function Verdict({ stress, threshold, newton, newtonOn }: { stress: StressState; threshold: number; newton: NewtonReading | null; newtonOn: boolean }) {
-  const p = stress.prediction?.probability ?? null;
-  let word = 'Warming up', cls = 'waiting', sub = 'Needs 30 seconds of clean beats.';
-  if (stress.paused) { word = 'Hold still'; sub = 'Too many sensor glitches in the last 30 seconds to give a reading.'; }
-  else if (p !== null) {
-    const stressed = p >= threshold;
-    const close = Math.abs(p - threshold) < 0.06;
-    word = `${close ? 'Leaning ' : ''}${stressed ? 'stressed' : 'relaxed'}`;
-    word = word[0].toUpperCase() + word.slice(1);
-    cls = `${stressed ? 'stressed' : 'relaxed'}${close ? ' lean' : ''}`;
-    if (!newtonOn) sub = 'In-browser model · last 30 seconds';
-    else if (!newton) sub = 'In-browser model · Newton is reading…';
-    else sub = (newton.label === 'stressed') === stressed ? 'Both models agree · last 30 seconds' : `The models disagree: Newton reads ${newton.label}.`;
+const MOOD: Record<string, { word: string; cls: string }> = {
+  learning: { word: 'Learning', cls: 'waiting' },
+  calmer: { word: 'Calmer', cls: 'relaxed' },
+  steady: { word: 'Steady', cls: 'steady' },
+  stressed: { word: 'More stressed', cls: 'stressed lean' },
+};
+
+/**
+ * One verdict: you against your own first two minutes. The in-browser model and
+ * Newton sit underneath as second opinions.
+ */
+export function Verdict({ reading, paused, modelP, newton, newtonOn }: { reading: Reading; paused: boolean; modelP: number | null; newton: NewtonReading | null; newtonOn: boolean }) {
+  const m = paused ? { word: 'Hold still', cls: 'waiting' } : MOOD[reading.mood];
+  let sub: string;
+  if (paused) sub = 'Too many sensor glitches in the last 30 seconds. Keep your finger still on the sensor.';
+  else if (reading.mood === 'learning') sub = `Sit comfortably and breathe normally: learning your baseline, ${fmt(reading.remaining)} to go.`;
+  else {
+    const pct = Math.round((reading.ratio! - 1) * 100);
+    const d = Math.round(reading.hrDelta!);
+    sub = `HRV ${Math.round(reading.rmssd!)} ms vs your ${Math.round(reading.baseline!.rmssd)} ms baseline (${pct >= 0 ? '+' : ''}${pct}%) · heart rate ${d >= 0 ? '+' : ''}${d} bpm`;
   }
+  const x = reading.ratio === null ? null : Math.min(1, Math.max(0, 1 - reading.ratio / 2));
   return (
     <section className="card verdict" aria-live="polite">
-      <div className="k">Right now</div>
-      <div className={`stamp ${cls}`}>{word}</div>
+      <div className="k">Right now, against your baseline</div>
+      <div className={`stamp ${m.cls}`}>{m.word}</div>
       <div className="sub">{sub}</div>
       <div className="chips">
-        <span>In-browser model <b>{p === null ? '—' : `${Math.round(p * 100)}%`}</b> stress</span>
+        <span>Stress model <b>{modelP === null ? '—' : `${Math.round(modelP * 100)}%`}</b></span>
         {newtonOn && <span>Newton <b>{newton ? `${Math.round(newton.stressedShare * newton.k)} of ${newton.k}` : '—'}</b> nearest examples stressed</span>}
       </div>
       <div className="band" aria-hidden="true">
-        <div className="th" style={{ left: `${threshold * 100}%` }} />
-        {p !== null && <div className="mark" style={{ left: `${p * 100}%` }} />}
+        <div className="th" style={{ left: '50%' }} />
+        {x !== null && <div className="mark" style={{ left: `${x * 100}%` }} />}
       </div>
-      <div className="band-l"><span>calm</span><span>threshold {Math.round(threshold * 100)}%</span><span>stressed</span></div>
+      <div className="band-l"><span>calmer</span><span>your baseline</span><span>more stressed</span></div>
     </section>
   );
 }

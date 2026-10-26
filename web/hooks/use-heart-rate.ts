@@ -150,10 +150,11 @@ export function useHeartRate() {
 
   /**
    * Plays a recorded WESAD session (relaxed, then stressed) through the same
-   * cleaning and models as a live sensor. The first two minutes are filled in
-   * at once so the screen isn't empty; the rest plays in real time.
+   * cleaning and models as a live sensor. The first `preloadMs` (two minutes by
+   * default) are filled in at once so the screen isn't empty; the rest plays in
+   * real time.
    */
-  const startDemo = useCallback(async () => {
+  const startDemo = useCallback(async (preloadMs = 120_000) => {
     stopDemo();
     resetSession();
     setError(null);
@@ -166,8 +167,7 @@ export function useHeartRate() {
     setBatteryLevel(null);
     setStatus('connected');
     let i = 0, t = 0;
-    const PRELOAD_MS = 120_000;
-    while (i < queue.length && t < PRELOAD_MS) { t += queue[i].rr; ingest([queue[i].rr], t); i++; }
+    while (i < queue.length && t < preloadMs) { t += queue[i].rr; ingest([queue[i].rr], t); i++; }
     setDemoLabel(queue[Math.max(0, i - 1)]?.label ?? null);
     startTimeRef.current = Date.now() - t;
     const next = () => {
