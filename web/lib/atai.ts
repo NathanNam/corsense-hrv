@@ -84,5 +84,8 @@ export async function ask(key: string, question: string, summary: string, images
     ...(imagesPng.length > 1 ? { multi_image: true } : {}),
     events: imagesPng.map((contents) => ({ type: 'data.base64_img', event_data: { contents, mime_type: 'image/png' } })),
   }, 120_000);
-  return typeof out === 'string' ? out.trim() : JSON.stringify(out);
+  // The fusion model returns its text as a one-item list.
+  const text = Array.isArray(out) ? out.filter((x) => typeof x === 'string').join('\n') : out;
+  if (typeof text !== 'string' || !text.trim()) throw new AtaiError('Newton returned no answer.', 502);
+  return text.replace(/^```\w*\n?|```$/g, '').trim();
 }

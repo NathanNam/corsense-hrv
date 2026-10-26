@@ -44,6 +44,8 @@ export function useHeartRate() {
   const [beats, setBeats] = useState<Beat[]>([]);
   const [rmssdHistory, setRMSSDHistory] = useState<RMSSDPoint[]>([]);
   const [demoLabel, setDemoLabel] = useState<string | null>(null);
+  // Bumped whenever a new session starts, so readings from the last one are dropped.
+  const [sessionId, setSessionId] = useState(0);
 
   const deviceRef = useRef<BluetoothDevice | null>(null);
   const characteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null);
@@ -81,6 +83,7 @@ export function useHeartRate() {
     setBeats([]);
     setRMSSDHistory([]);
     setSensorContact(null);
+    setSessionId((n) => n + 1);
   }, []);
 
   const handleNotification = useCallback((event: Event) => {
@@ -209,6 +212,7 @@ export function useHeartRate() {
 
   return {
     status,
+    sessionId,
     source,
     demoLabel,
     error,

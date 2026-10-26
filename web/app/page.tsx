@@ -14,7 +14,7 @@ export default function Home() {
   const stress = useStressPrediction(hr.beats);
   const cleanRR = useMemo(() => hr.beats.filter((b) => !b.glitch).map((b) => b.rr), [hr.beats]);
   const live = hr.status === 'connected';
-  const newton = useNewton(cleanRR, live);
+  const newton = useNewton(cleanRR, live, hr.sessionId);
   const svgRef = useRef<SVGSVGElement>(null);
   const reading = useMemo(() => read(
     hr.rmssdHistory.map((p) => ({ time: p.time, value: p.rmssd })),

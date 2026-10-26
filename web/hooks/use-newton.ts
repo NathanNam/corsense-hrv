@@ -23,7 +23,7 @@ const EVERY_MS = 15_000;
  * is kept only in this tab's memory (React state): never in storage, never in
  * a URL. A reload forgets it.
  */
-export function useNewton(cleanRR: number[], live: boolean) {
+export function useNewton(cleanRR: number[], live: boolean, sessionId: number) {
   const [serverKey, setServerKey] = useState(false);
   const [ownKey, setOwnKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,9 +60,11 @@ export function useNewton(cleanRR: number[], live: boolean) {
     }
   }, [post]);
 
-  // Newton's own reading, every 15 seconds while beats are coming in.
+  // Newton's own reading, every 15 seconds while beats are coming in; a new
+  // session (or the demo jumping ahead) starts over straight away.
   useEffect(() => {
-    if (!available || !live) { setReading(null); return; }
+    setReading(null);
+    if (!available || !live) return;
     let stopped = false;
     const run = async () => {
       const rr = rrRef.current;
@@ -75,10 +77,10 @@ export function useNewton(cleanRR: number[], live: boolean) {
         if ((e as { status?: number }).status === 401) setOwnKey(null);
       }
     };
-    run();
+    const first = setTimeout(run, 300);
     const id = setInterval(run, EVERY_MS);
-    return () => { stopped = true; clearInterval(id); };
-  }, [available, live, post]);
+    return () => { stopped = true; clearTimeout(first); clearInterval(id); };
+  }, [available, live, post, sessionId]);
 
   return { serverKey, ownKey, setOwnKey, available, loading, messages, ask, reading, readingError };
 }
