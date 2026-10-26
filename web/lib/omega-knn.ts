@@ -1,5 +1,5 @@
 /**
- * Newton's stress reading: embed a window of clean RR intervals with the Omega
+ * Newton's stress reading: embed a window of clean RR intervals with the Newton Omega
  * encoder and vote among the nearest labelled windows (n-shot KNN), the pattern
  * in Archetype AI's atai-newton-omega-model skill.
  *

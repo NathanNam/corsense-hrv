@@ -4,7 +4,7 @@
  * what lets the app run on serverless hosting.
  *
  *   Fusion model  Newton::c2_6_8b_fp8_260424d7a55d5e   chart images + text -> answer
- *   Omega encoder OmegaEncoder::omega_embeddings_1_4  RR window -> 768-d embedding
+ *   Newton Omega encoder  OmegaEncoder::omega_embeddings_1_4  RR window -> 768-d embedding
  *
  * Keys: a visitor's own key arrives per request in the `x-atai-key` header (it
  * lives only in their browser tab's memory and is never stored or logged here);
@@ -62,7 +62,7 @@ export async function embed(key: string, series: number[]): Promise<number[]> {
     normalize_input: false,
     events: [{ type: 'data.numeric_array', event_data: { contents: [series] } }],
   }, 30_000);
-  if (!Array.isArray(out) || typeof out[0] !== 'number') throw new AtaiError('Unexpected embedding shape from Omega.', 502);
+  if (!Array.isArray(out) || typeof out[0] !== 'number') throw new AtaiError('Unexpected embedding shape from the Newton Omega encoder.', 502);
   return out as number[];
 }
 

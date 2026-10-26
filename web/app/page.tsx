@@ -87,7 +87,7 @@ export default function Home() {
 
       <footer className="foot">
         <p>Not medical advice. The verdict compares you with your own first two minutes, the way HRV apps such as Elite HRV use a personal baseline. The stress model underneath is a LightGBM model trained on chest-ECG recordings of 15 people (WESAD); on people it hadn&apos;t seen it was right about 6 times in 10 (AUC 0.71), and it hasn&apos;t been checked on fingertip sensors.</p>
-        <p>Newton (optional) votes among labelled WESAD windows embedded with Archetype AI&apos;s Omega encoder; the recorded demo uses the same WESAD recordings, so in the demo it&apos;s a showcase, not a test.</p>
+        <p>Newton (optional) votes among labelled WESAD windows embedded with Archetype AI&apos;s Newton Omega encoder; the recorded demo uses the same WESAD recordings, so in the demo it&apos;s a showcase, not a test.</p>
         <p><a href="https://www.nathannam.com">Nathan Nam</a> · <a href="https://github.com/NathanNam/heartstrip">code</a></p>
       </footer>
 
