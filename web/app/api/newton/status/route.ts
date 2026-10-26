@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-
-export async function GET() {
-  const available = !!(process.env.ATAI_API_KEY && process.env.ATAI_API_ENDPOINT);
-  return NextResponse.json({ available });
+// GET /api/newton/status -> whether this server has its own Newton key.
+// Without one, visitors can still use Newton with their own key.
+export function GET() {
+  return Response.json({ serverKey: !!process.env.ATAI_API_KEY }, { headers: { 'Cache-Control': 'no-store' } });
 }
