@@ -1,94 +1,56 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useMemo } from 'react';
 import { extractFeatures } from '../lib/hrv-features';
 import { predictStress, MODEL_CONFIG, type StressPrediction } from '../lib/stress-predictor';
-import type { RRPoint } from './use-heart-rate';
+import { quality } from '../lib/rr-clean';
+import type { Beat } from './use-heart-rate';
+
+export interface StressPoint {
+  time: number;
+  probability: number;
+}
 
 export interface StressState {
   prediction: StressPrediction | null;
-  /** Number of RR intervals in the current window */
+  /** Clean beats in the current 30-second window. */
   windowCount: number;
-  /** Whether we have enough data to make a prediction */
   ready: boolean;
-  /** History of stress probability over time */
-  history: { time: number; timestamp: string; probability: number }[];
+  /** True when too many recent beats were glitches to trust a verdict. */
+  paused: boolean;
+  history: StressPoint[];
 }
 
-const MAX_HISTORY = 300;
-const UPDATE_INTERVAL_MS = 5000; // predict every 5 seconds
+const STEP_MS = 5000;
+/** Below this share of clean beats in the window, no verdict is given. */
+export const MIN_QUALITY = 0.8;
 
-export function useStressPrediction(rrHistory: RRPoint[]) {
-  const [state, setState] = useState<StressState>({
-    prediction: null,
-    windowCount: 0,
-    ready: false,
-    history: [],
-  });
-  const lastPredictTimeRef = useRef<number>(0);
-
-  useEffect(() => {
-    if (rrHistory.length === 0) {
-      setState({ prediction: null, windowCount: 0, ready: false, history: [] });
-      return;
+/**
+ * Stress probability every 5 seconds of session time, from the clean beats in
+ * the 30 seconds before. Session time (not wall time) means a recorded session
+ * gets the same history as a live one.
+ */
+export function useStressPrediction(beats: Beat[]): StressState {
+  return useMemo(() => {
+    const empty: StressState = { prediction: null, windowCount: 0, ready: false, paused: false, history: [] };
+    if (!beats.length) return empty;
+    const windowMs = MODEL_CONFIG.windowSizeSec * 1000;
+    const history: StressPoint[] = [];
+    let last: { prediction: StressPrediction | null; count: number; paused: boolean } = { prediction: null, count: 0, paused: false };
+    const start = beats[0].time, end = beats[beats.length - 1].time;
+    let lo = 0;
+    for (let t = start + windowMs; t <= end; t += STEP_MS) {
+      while (lo < beats.length && beats[lo].time < t - windowMs) lo++;
+      let hi = lo;
+      while (hi < beats.length && beats[hi].time <= t) hi++;
+      const win = beats.slice(lo, hi);
+      const clean = win.filter((b) => !b.glitch).map((b) => b.rr);
+      const paused = quality(win.map((b) => !b.glitch), win.length) < MIN_QUALITY;
+      const features = paused ? null : extractFeatures(clean, MODEL_CONFIG.windowSizeSec, MODEL_CONFIG.minRrInWindow);
+      const prediction = features ? predictStress(features) : null;
+      if (prediction) history.push({ time: t, probability: Math.round(prediction.probability * 1000) / 1000 });
+      last = { prediction, count: clean.length, paused };
     }
-
-    const now = Date.now();
-    if (now - lastPredictTimeRef.current < UPDATE_INTERVAL_MS) {
-      return;
-    }
-
-    // Get RR intervals from the last 30 seconds
-    const latestTime = rrHistory[rrHistory.length - 1].time;
-    const windowStartTime = latestTime - MODEL_CONFIG.windowSizeSec * 1000;
-    const windowRRs = rrHistory
-      .filter(p => p.time >= windowStartTime)
-      .map(p => p.rr);
-
-    const ready = windowRRs.length >= MODEL_CONFIG.minRrInWindow;
-
-    if (!ready) {
-      setState(prev => ({ ...prev, windowCount: windowRRs.length, ready: false }));
-      return;
-    }
-
-    // Extract features and predict
-    const features = extractFeatures(
-      windowRRs,
-      MODEL_CONFIG.windowSizeSec,
-      MODEL_CONFIG.minRrInWindow
-    );
-
-    if (!features) {
-      setState(prev => ({ ...prev, windowCount: windowRRs.length, ready: false }));
-      return;
-    }
-
-    const prediction = predictStress(features);
-    lastPredictTimeRef.current = now;
-
-    const lastRR = rrHistory[rrHistory.length - 1];
-
-    setState(prev => {
-      const newHistory = [
-        ...prev.history,
-        {
-          time: lastRR.time,
-          timestamp: lastRR.timestamp,
-          probability: Math.round(prediction.probability * 1000) / 1000,
-        },
-      ];
-
-      return {
-        prediction,
-        windowCount: windowRRs.length,
-        ready: true,
-        history: newHistory.length > MAX_HISTORY
-          ? newHistory.slice(-MAX_HISTORY)
-          : newHistory,
-      };
-    });
-  }, [rrHistory]);
-
-  return state;
+    return { prediction: last.prediction, windowCount: last.count, ready: !!last.prediction, paused: last.paused, history };
+  }, [beats]);
 }

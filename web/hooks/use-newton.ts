@@ -1,59 +1,84 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { captureCharts } from '../lib/capture-charts';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface ChatMessage {
   role: 'user' | 'newton';
   text: string;
 }
 
-export function useNewton() {
-  const [available, setAvailable] = useState(false);
+export interface NewtonReading {
+  label: 'relaxed' | 'stressed';
+  stressedShare: number;
+  k: number;
+  librarySize: number;
+  at: number;
+}
+
+const WINDOW = 64;
+const EVERY_MS = 15_000;
+
+/**
+ * Newton, with either the server's key or the visitor's own. The visitor's key
+ * is kept only in this tab's memory (React state): never in storage, never in
+ * a URL. A reload forgets it.
+ */
+export function useNewton(cleanRR: number[], live: boolean) {
+  const [serverKey, setServerKey] = useState(false);
+  const [ownKey, setOwnKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [reading, setReading] = useState<NewtonReading | null>(null);
+  const [readingError, setReadingError] = useState<string | null>(null);
+  const rrRef = useRef(cleanRR);
+  rrRef.current = cleanRR;
 
   useEffect(() => {
-    fetch('/api/newton/status')
-      .then((res) => res.json())
-      .then((data) => setAvailable(data.available))
-      .catch(() => setAvailable(false));
+    fetch('/api/newton/status').then((r) => r.json()).then((d) => setServerKey(!!d.serverKey)).catch(() => setServerKey(false));
   }, []);
 
-  const askNewton = useCallback(
-    async (question: string) => {
-      setMessages((prev) => [...prev, { role: 'user', text: question }]);
-      setLoading(true);
-      setError(null);
+  const available = serverKey || !!ownKey;
+  const headers = useCallback((): HeadersInit => ({ 'Content-Type': 'application/json', ...(ownKey ? { 'x-atai-key': ownKey } : {}) }), [ownKey]);
 
+  const post = useCallback(async (path: string, body: unknown) => {
+    const res = await fetch(path, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(data.error || `Newton ${res.status}`), { status: res.status });
+    return data;
+  }, [headers]);
+
+  const ask = useCallback(async (question: string, summary: string, images: string[]) => {
+    setMessages((m) => [...m, { role: 'user', text: question }]);
+    setLoading(true);
+    try {
+      const { answer } = await post('/api/newton/ask', { question, summary, images });
+      setMessages((m) => [...m, { role: 'newton', text: answer }]);
+    } catch (e) {
+      setMessages((m) => [...m, { role: 'newton', text: `Sorry, that didn't work: ${(e as Error).message}` }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [post]);
+
+  // Newton's own reading, every 15 seconds while beats are coming in.
+  useEffect(() => {
+    if (!available || !live) { setReading(null); return; }
+    let stopped = false;
+    const run = async () => {
+      const rr = rrRef.current;
+      if (rr.length < WINDOW) return;
       try {
-        // Capture the 4 HRV charts as a screenshot
-        const chartImage = await captureCharts();
-
-        const res = await fetch('/api/newton/query', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question, chartImage }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Request failed');
-        }
-
-        setMessages((prev) => [...prev, { role: 'newton', text: data.response }]);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Something went wrong';
-        setError(message);
-        setMessages((prev) => [...prev, { role: 'newton', text: `Error: ${message}` }]);
-      } finally {
-        setLoading(false);
+        const v = await post('/api/newton/classify', { rr: rr.slice(-WINDOW) });
+        if (!stopped) { setReading({ ...v, at: Date.now() }); setReadingError(null); }
+      } catch (e) {
+        if (!stopped) setReadingError((e as Error).message);
+        if ((e as { status?: number }).status === 401) setOwnKey(null);
       }
-    },
-    [],
-  );
+    };
+    run();
+    const id = setInterval(run, EVERY_MS);
+    return () => { stopped = true; clearInterval(id); };
+  }, [available, live, post]);
 
-  return { available, loading, error, messages, askNewton };
+  return { serverKey, ownKey, setOwnKey, available, loading, messages, ask, reading, readingError };
 }
