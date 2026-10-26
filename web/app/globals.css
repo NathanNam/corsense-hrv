@@ -34,6 +34,9 @@ button { font: inherit; cursor: pointer; }
 .btn { border: 1.5px solid var(--ink); background: var(--card); color: var(--ink); border-radius: 4px; padding: 8px 14px; font-weight: 600; font-size: 14px; }
 .btn.ink { background: var(--ink); color: var(--card); }
 .btn.small { padding: 4px 10px; font-size: 12px; }
+.btn.file { position: relative; display: inline-block; }
+.btn.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.btn.file:focus-within { outline: 3px solid var(--warn); outline-offset: 2px; }
 .banner { font-size: 13px; color: var(--mute); margin: -4px 0 12px; }
 .banner b { color: var(--ink); }
 

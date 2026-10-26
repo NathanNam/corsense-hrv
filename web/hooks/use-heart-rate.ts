@@ -27,7 +27,7 @@ export interface RMSSDPoint {
 }
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
-export type Source = 'sensor' | 'demo' | null;
+export type Source = 'sensor' | 'demo' | 'recording' | null;
 
 // Ten minutes of beats at up to ~150 bpm.
 const MAX_BEATS = 1500;
@@ -186,6 +186,21 @@ export function useHeartRate() {
     next();
   }, [ingest, resetSession, stopDemo]);
 
+  /** Loads a whole recorded session (RR intervals in ms) at once. */
+  const openRecording = useCallback((rr: number[], name: string) => {
+    stopDemo();
+    resetSession();
+    setError(null);
+    setSource('recording');
+    setDeviceName(name);
+    setSensorLocation(null);
+    setBatteryLevel(null);
+    setDemoLabel(null);
+    let t = 0;
+    for (const r of rr) { t += r; ingest([r], t); }
+    setStatus('disconnected');
+  }, [ingest, resetSession, stopDemo]);
+
   const disconnect = useCallback(() => {
     stopDemo();
     const characteristic = characteristicRef.current;
@@ -228,6 +243,7 @@ export function useHeartRate() {
     glitchesRemoved: beats.filter((b) => b.glitch).length,
     connect,
     startDemo,
+    openRecording,
     disconnect,
   };
 }

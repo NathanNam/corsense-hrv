@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { parseRR } from '../lib/import-rr';
 import type { Reading } from '../lib/baseline';
 import type { ChatMessage, NewtonReading } from '../hooks/use-newton';
 
@@ -16,7 +17,21 @@ export function Logo() {
 const fmt = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 /** First screen: what this is, and the two ways in. */
-export function Start({ onConnect, onDemo, error, connecting }: { onConnect: () => void; onDemo: () => void; error: string | null; connecting: boolean }) {
+export function Start({ onConnect, onDemo, onOpen, error, connecting }: { onConnect: () => void; onDemo: () => void; onOpen: (rr: number[], name: string) => void; error: string | null; connecting: boolean }) {
+  const [fileError, setFileError] = useState<string | null>(null);
+  const open = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      if (file.size > 2_000_000) throw new Error('That file is over 2 MB; an RR export is usually a few KB.');
+      const { rr } = parseRR(await file.text());
+      setFileError(null);
+      onOpen(rr, file.name);
+    } catch (err) {
+      setFileError((err as Error).message);
+    }
+  };
   return (
     <section className="card start">
       <div className="k">Heart rate variability</div>
@@ -28,9 +43,12 @@ export function Start({ onConnect, onDemo, error, connecting }: { onConnect: () 
       <div className="actions">
         <button className="btn ink" onClick={onConnect} disabled={connecting}>{connecting ? 'Connecting…' : 'Connect a heart-rate sensor'}</button>
         <button className="btn" onClick={onDemo}>Play a recorded session</button>
+        <label className="btn file">Open your recording<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" onChange={open} /></label>
       </div>
       {error && <p className="err" role="alert">{error}</p>}
-      <p className="fine">Works with sensors that report beat-to-beat intervals: Elite CorSense, Polar H10 / H9 / Verity Sense, Garmin HRM-Pro, Wahoo TICKR and others. Needs Chrome or Edge on a laptop or Android; iPhone browsers don&apos;t support Web Bluetooth, so try the recorded session there.</p>
+      {fileError && <p className="err" role="alert">{fileError}</p>}
+      <p className="fine">Works with sensors that report beat-to-beat intervals: Elite CorSense, Polar H10 / H9 / Verity Sense, Garmin HRM-Pro, Wahoo TICKR and others. Needs Chrome or Edge on a laptop or Android; iPhone browsers don&apos;t support Web Bluetooth. On an iPhone, record in Elite HRV, export the reading&apos;s raw RR intervals, and open the file here.</p>
+      <p className="fine">Your recording is read in this browser only. Nothing is uploaded unless you use Newton, which sends the last 64 beats to Archetype AI.</p>
     </section>
   );
 }
@@ -46,7 +64,7 @@ const MOOD: Record<string, { word: string; cls: string }> = {
  * One verdict: you against your own first two minutes. The in-browser model and
  * Newton sit underneath as second opinions.
  */
-export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, newtonBeats, newtonWindow, onRetake }: { reading: Reading; paused: boolean; modelP: number | null; threshold: number; newton: NewtonReading | null; newtonOn: boolean; newtonBeats: number; newtonWindow: number; onRetake: () => void }) {
+export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, newtonBeats, newtonWindow, onRetake }: { reading: Reading; paused: boolean; modelP: number | null; threshold: number; newton: NewtonReading | null; newtonOn: boolean; newtonBeats: number; newtonWindow: number; onRetake: (() => void) | null }) {
   const m = paused ? { word: 'Hold still', cls: 'waiting' } : MOOD[reading.mood];
   let sub: string;
   if (paused) sub = 'Too many sensor glitches in the last 30 seconds. Keep your finger still on the sensor.';
@@ -67,7 +85,7 @@ export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, 
     : null;
   return (
     <section className="card verdict" aria-live="polite">
-      <div className="k">Right now, against your baseline</div>
+      <div className="k">{onRetake ? 'Right now, against your baseline' : 'At the end, against its baseline'}</div>
       <div className={`stamp ${m.cls}`}>{m.word}</div>
       <div className="sub">{sub}</div>
       {note && <p className="note">{note}</p>}
@@ -86,7 +104,7 @@ export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, 
         {x !== null && <div className="mark" style={{ left: `${x * 100}%` }} />}
       </div>
       <div className="band-l"><span>calmer</span><span>your baseline</span><span>more stressed</span></div>
-      {reading.mood !== 'learning' && <button className="btn small retake" onClick={onRetake}>Retake baseline</button>}
+      {reading.mood !== 'learning' && onRetake && <button className="btn small retake" onClick={onRetake}>Retake baseline</button>}
     </section>
   );
 }

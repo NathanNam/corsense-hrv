@@ -23,7 +23,11 @@ const EVERY_MS = 10_000;
  * is kept only in this tab's memory (React state): never in storage, never in
  * a URL. A reload forgets it.
  */
-export function useNewton(rr: number[], live: boolean, sessionId: number) {
+/**
+ * `mode`: 'live' reads every 10 s while beats arrive; 'once' reads the last
+ * window of a finished recording one time; 'off' doesn't read.
+ */
+export function useNewton(rr: number[], mode: 'live' | 'once' | 'off', sessionId: number) {
   const [serverKey, setServerKey] = useState(false);
   const [ownKey, setOwnKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,7 +68,7 @@ export function useNewton(rr: number[], live: boolean, sessionId: number) {
   // session (or the demo jumping ahead) starts over straight away.
   useEffect(() => {
     setReading(null);
-    if (!available || !live) return;
+    if (!available || mode === 'off') return;
     let stopped = false;
     const run = async () => {
       const rr = rrRef.current;
@@ -78,9 +82,9 @@ export function useNewton(rr: number[], live: boolean, sessionId: number) {
       }
     };
     const first = setTimeout(run, 300);
-    const id = setInterval(run, EVERY_MS);
-    return () => { stopped = true; clearTimeout(first); clearInterval(id); };
-  }, [available, live, post, sessionId]);
+    const id = mode === 'live' ? setInterval(run, EVERY_MS) : undefined;
+    return () => { stopped = true; clearTimeout(first); if (id) clearInterval(id); };
+  }, [available, mode, post, sessionId]);
 
   /** Beats collected toward Newton's first window, for a progress hint. */
   const beatsToFirst = Math.min(rr.length, WINDOW);

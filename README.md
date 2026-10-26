@@ -27,6 +27,7 @@ The time between heartbeats keeps changing. When you're relaxed it varies more; 
   - **Stress model:** a LightGBM model running in the browser, from 18 HRV features over 30 seconds.
   - **Newton:** the last 64 beats are embedded with Archetype AI's Newton Omega encoder, then it takes a vote of the 5 most similar labelled windows.
 - **Lets you ask Newton.** Newton's C 2.6 fusion model looks at your timeline and answers questions such as "Am I stressed?" in about two seconds.
+- **Opens your own recordings.** Load a text or CSV file of beat-to-beat intervals, such as Elite HRV's raw RR export (one interval per line, in ms), and the whole session runs through the same cleaning, baseline and models. This is also the way to use your sensor's data on an iPhone, since iPhone browsers lack Web Bluetooth. The file is read in the browser and never uploaded; only Newton's last 64 beats go to Archetype AI, and only if you use Newton.
 - **Has a demo for anyone without a sensor.** It replays the clearest relaxed and stressed examples from the WESAD study in real time, and you can jump to the stress part. The examples come from three people for each state, picked separately, so a real session is usually subtler.
 
 Not medical advice.

@@ -25,7 +25,7 @@ export default function Home() {
     return out;
   }, [hr.beats]);
   const live = hr.status === 'connected';
-  const newton = useNewton(newtonRR, live, hr.sessionId);
+  const newton = useNewton(newtonRR, live ? 'live' : hr.source === 'recording' && hr.beats.length ? 'once' : 'off', hr.sessionId);
   const svgRef = useRef<SVGSVGElement>(null);
   // Retake baseline: the next two minutes become the new baseline.
   const [baselineFrom, setBaselineFrom] = useState(-Infinity);
@@ -64,22 +64,25 @@ export default function Home() {
             <span className={`pill ${hr.source === 'demo' ? 'demo' : ''}`}><i />{hr.deviceName}</span>
             {hr.sensorLocation && <span>{hr.sensorLocation}</span>}
             {hr.batteryLevel !== null && <span>{hr.batteryLevel}% battery</span>}
-            {hr.status === 'disconnected' && <span>{hr.source === 'demo' ? 'Recording finished' : 'Disconnected'}</span>}
-            <button className="btn small" onClick={hr.disconnect}>{hr.source === 'demo' ? 'Stop demo' : 'Disconnect'}</button>
+            {hr.status === 'disconnected' && hr.source !== 'recording' && <span>{hr.source === 'demo' ? 'Recording finished' : 'Disconnected'}</span>}
+            <button className="btn small" onClick={hr.disconnect}>{hr.source === 'demo' ? 'Stop demo' : hr.source === 'recording' ? 'Close recording' : 'Disconnect'}</button>
           </div>
         )}
       </header>
 
       {!started ? (
-        <Start onConnect={hr.connect} onDemo={() => hr.startDemo()} error={hr.error} connecting={hr.status === 'connecting'} />
+        <Start onConnect={hr.connect} onDemo={() => hr.startDemo()} onOpen={hr.openRecording} error={hr.error} connecting={hr.status === 'connecting'} />
       ) : (
         <>
+          {hr.source === 'recording' && (
+            <p className="banner">Recording: <b>{hr.deviceName}</b>, {hr.beats.length} beats ({Math.round(elapsed / 60000)} min). Its first two minutes are the baseline; the stamp, the model and Newton describe how it ended. The timeline shows its last 10 minutes.</p>
+          )}
           {hr.source === 'demo' && (
             <p className="banner">Demo: the clearest relaxed and stressed examples from the WESAD study (chest ECG; three people each, picked separately, so likely different people), played in real time: about 6 minutes relaxed, then 5 minutes from a stress task. A real session is usually subtler. Now playing: <b>{hr.demoLabel}</b>.{' '}
               {hr.demoLabel === 'relaxed' && <button className="btn small" onClick={() => hr.startDemo(7.5 * 60_000)}>Jump to the stress part</button>}</p>
           )}
           <div className="grid">
-            <Verdict reading={reading} paused={stress.paused} modelP={stress.prediction?.probability ?? null} threshold={MODEL_CONFIG.threshold} newton={newton.reading} newtonOn={newton.available} newtonBeats={newton.beatsToFirst} newtonWindow={newton.windowSize} onRetake={retakeBaseline} />
+            <Verdict reading={reading} paused={stress.paused} modelP={stress.prediction?.probability ?? null} threshold={MODEL_CONFIG.threshold} newton={newton.reading} newtonOn={newton.available} newtonBeats={newton.beatsToFirst} newtonWindow={newton.windowSize} onRetake={hr.source === 'recording' ? null : retakeBaseline} />
             <Heart hr={hr.currentHR} rmssd={hr.currentRMSSD} elapsed={elapsed} />
             <Quality quality={hr.signalQuality} glitches={hr.glitchesRemoved} recent={hr.beats.map((b) => !b.glitch)} minQuality={MIN_QUALITY} />
             <section className="card timeline wide">
