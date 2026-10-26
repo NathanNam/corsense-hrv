@@ -63,7 +63,7 @@ export default function Home() {
               {hr.demoLabel === 'relaxed' && <button className="btn small" onClick={() => hr.startDemo(7.5 * 60_000)}>Jump to the stress part</button>}</p>
           )}
           <div className="grid">
-            <Verdict reading={reading} paused={stress.paused} modelP={stress.prediction?.probability ?? null} newton={newton.reading} newtonOn={newton.available} />
+            <Verdict reading={reading} paused={stress.paused} modelP={stress.prediction?.probability ?? null} threshold={MODEL_CONFIG.threshold} newton={newton.reading} newtonOn={newton.available} />
             <Heart hr={hr.currentHR} rmssd={hr.currentRMSSD} elapsed={elapsed} />
             <Quality quality={hr.signalQuality} glitches={hr.glitchesRemoved} recent={hr.beats.map((b) => !b.glitch)} minQuality={MIN_QUALITY} />
             <section className="card timeline wide">

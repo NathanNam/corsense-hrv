@@ -46,7 +46,7 @@ const MOOD: Record<string, { word: string; cls: string }> = {
  * One verdict: you against your own first two minutes. The in-browser model and
  * Newton sit underneath as second opinions.
  */
-export function Verdict({ reading, paused, modelP, newton, newtonOn }: { reading: Reading; paused: boolean; modelP: number | null; newton: NewtonReading | null; newtonOn: boolean }) {
+export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn }: { reading: Reading; paused: boolean; modelP: number | null; threshold: number; newton: NewtonReading | null; newtonOn: boolean }) {
   const m = paused ? { word: 'Hold still', cls: 'waiting' } : MOOD[reading.mood];
   let sub: string;
   if (paused) sub = 'Too many sensor glitches in the last 30 seconds. Keep your finger still on the sensor.';
@@ -63,8 +63,14 @@ export function Verdict({ reading, paused, modelP, newton, newtonOn }: { reading
       <div className={`stamp ${m.cls}`}>{m.word}</div>
       <div className="sub">{sub}</div>
       <div className="chips">
-        <span>Stress model <b>{modelP === null ? '—' : `${Math.round(modelP * 100)}%`}</b></span>
-        {newtonOn && <span>Newton <b>{newton ? `${Math.round(newton.stressedShare * newton.k)} of ${newton.k}` : '—'}</b> nearest examples stressed</span>}
+        <span title="LightGBM model trained on WESAD; above its threshold it reads stressed">
+          Stress model: <b>{modelP === null ? '—' : `${modelP >= threshold ? 'stressed' : 'relaxed'} (${Math.round(modelP * 100)}%)`}</b>
+        </span>
+        {newtonOn && (
+          <span title="Newton compares the last 64 beats with labelled example windows and takes a vote of the 5 most similar">
+            Newton: <b>{newton ? `${newton.label} (${Math.round(newton.stressedShare * newton.k)} of ${newton.k} similar examples stressed)` : 'reading…'}</b>
+          </span>
+        )}
       </div>
       <div className="band" aria-hidden="true">
         <div className="th" style={{ left: '50%' }} />
