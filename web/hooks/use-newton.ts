@@ -16,7 +16,7 @@ export interface NewtonReading {
 }
 
 const WINDOW = 64;
-const EVERY_MS = 15_000;
+const EVERY_MS = 10_000;
 
 /**
  * Newton, with either the server's key or the visitor's own. The visitor's key
@@ -60,7 +60,7 @@ export function useNewton(rr: number[], live: boolean, sessionId: number) {
     }
   }, [post]);
 
-  // Newton's own reading, every 15 seconds while beats are coming in; a new
+  // Newton's own reading, every 10 seconds while beats are coming in; a new
   // session (or the demo jumping ahead) starts over straight away.
   useEffect(() => {
     setReading(null);
@@ -82,5 +82,7 @@ export function useNewton(rr: number[], live: boolean, sessionId: number) {
     return () => { stopped = true; clearTimeout(first); clearInterval(id); };
   }, [available, live, post, sessionId]);
 
-  return { serverKey, ownKey, setOwnKey, available, loading, messages, ask, reading, readingError };
+  /** Beats collected toward Newton's first window, for a progress hint. */
+  const beatsToFirst = Math.min(rr.length, WINDOW);
+  return { serverKey, ownKey, setOwnKey, available, loading, messages, ask, reading, readingError, beatsToFirst, windowSize: WINDOW };
 }

@@ -60,7 +60,7 @@ Newton uses Archetype AI's stateless **direct query** endpoint: one `POST /api/l
 | | Model | Input | Output | Speed |
 |---|---|---|---|---|
 | Ask Newton | `Newton::c2_6_8b_fp8_260424d7a55d5e` (fusion) | the timeline as a PNG + the current numbers as text | a short answer | ~2 s |
-| Newton's reading | `OmegaEncoder::omega_embeddings_1_4` (Newton Omega encoder) | the last 64 RR intervals, one channel, scaled once with the example pool's mean and SD (`normalize_input: false`) | 768-d embedding → majority of 5 nearest labelled windows | ~2 s (first call ~10 s while 30 example windows are embedded) |
+| Newton's reading | `OmegaEncoder::omega_embeddings_1_4` (Newton Omega encoder) | the last 64 RR intervals, one channel, scaled once with the example pool's mean and SD (`normalize_input: false`) | 768-d embedding → majority of 5 nearest labelled windows | ~1 s (the 30 example windows are embedded ahead of time, in `lib/newton-library.json`) |
 
 Following Archetype AI's [`atai-newton-omega-model`](https://github.com/archetypeai/agent-skills/blob/main/skills/atai-newton-omega-model/SKILL.md) skill, every window is one contiguous series:
 - **Example windows** stay inside one person's recording.
@@ -97,6 +97,7 @@ web/
   lib/omega-knn.ts          Newton Omega encoder embeddings + n-shot KNN
   lib/hrv-features.ts, stress-predictor.ts, stress-model-data.json   the in-browser model
   public/demo/wesad-session.json   demo beats and Newton's examples
+  lib/newton-library.json   Newton's 30 example windows, already embedded (scripts/build-newton-library.mjs)
   scripts/brand.mjs         favicon set and share image
 connect.py, scan.py         command-line BLE tools (python connect.py streams HR + RR)
 train_stress_model.py, export_model_trees.py   train the LightGBM model, export it for the browser

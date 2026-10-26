@@ -4,13 +4,17 @@
  * in Archetype AI's atai-newton-omega-model skill.
  *
  * The library comes from the WESAD baseline and stress recordings bundled in
- * public/demo. Its embeddings are computed on first use and kept for the life
- * of the server instance. One per-channel scaler, fitted on the library pool,
+ * public/demo. Its embeddings are saved in lib/newton-library.json (built by
+ * scripts/build-newton-library.mjs), so a reading costs one Omega call; if that
+ * file is missing or out of date they're computed on first use instead. One
+ * per-channel scaler, fitted on the library pool,
  * is applied to every window (normalize_input stays false), so windows keep
  * their real RR levels relative to each other.
  */
 import { embed } from './atai';
 import session from '../public/demo/wesad-session.json';
+import saved from './newton-library.json';
+import { OMEGA_MODEL } from './atai';
 
 export const WINDOW = 64;      // beats per window, about 45-60 seconds
 const STEP = 16;
@@ -36,7 +40,10 @@ export const scale = (w: number[]) => w.map((x) => (x - MEAN) / STD);
 const l2 = (v: number[]) => { const n = Math.hypot(...v) || 1; return v.map((x) => x / n); };
 const dist = (a: number[], b: number[]) => { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return Math.sqrt(s); };
 
-let library: Promise<Labelled[]> | null = null;
+// Use the saved embeddings only if they were built with these exact settings.
+const savedOk = saved.model === OMEGA_MODEL && saved.window === WINDOW && saved.step === STEP && saved.person === PERSON
+  && Math.abs(saved.mean - MEAN) < 1e-6 && Math.abs(saved.sd - STD) < 1e-6;
+let library: Promise<Labelled[]> | null = savedOk ? Promise.resolve(saved.items as Labelled[]) : null;
 
 async function buildLibrary(key: string): Promise<Labelled[]> {
   const items = (session.segments as { label: string; rr: number[] }[]).flatMap((s) => {

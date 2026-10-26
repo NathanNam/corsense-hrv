@@ -46,7 +46,7 @@ const MOOD: Record<string, { word: string; cls: string }> = {
  * One verdict: you against your own first two minutes. The in-browser model and
  * Newton sit underneath as second opinions.
  */
-export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn }: { reading: Reading; paused: boolean; modelP: number | null; threshold: number; newton: NewtonReading | null; newtonOn: boolean }) {
+export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn, newtonBeats, newtonWindow }: { reading: Reading; paused: boolean; modelP: number | null; threshold: number; newton: NewtonReading | null; newtonOn: boolean; newtonBeats: number; newtonWindow: number }) {
   const m = paused ? { word: 'Hold still', cls: 'waiting' } : MOOD[reading.mood];
   let sub: string;
   if (paused) sub = 'Too many sensor glitches in the last 30 seconds. Keep your finger still on the sensor.';
@@ -68,7 +68,7 @@ export function Verdict({ reading, paused, modelP, threshold, newton, newtonOn }
         </span>
         {newtonOn && (
           <span title="Newton compares the last 64 beats with labelled example windows and takes a vote of the 5 most similar">
-            Newton: <b>{newton ? `${newton.label} (${Math.round(newton.stressedShare * newton.k)} of ${newton.k} similar examples stressed)` : 'reading…'}</b>
+            Newton: <b>{newton ? `${newton.label} (${Math.round(newton.stressedShare * newton.k)} of ${newton.k} similar examples stressed)` : newtonBeats < newtonWindow ? `collecting beats, ${newtonBeats} of ${newtonWindow}` : 'reading…'}</b>
           </span>
         )}
       </div>
